@@ -161,9 +161,11 @@ mod tests {
         let pref = crate::recommend::PerformancePreference::Medium;
         let rec = crate::recommend::ModelRecommendation {
             model: "qwen3.5:9b".into(),
-            size_label: "7B".into(),
+            size_label: "9B".into(),
+            category: crate::recommend::ModelCategory::General,
+            tool_calling: true,
             description: "test".into(),
-            estimated_ram_gb: 5.0,
+            estimated_ram_gb: 6.0,
         };
 
         // Test that we can create the config object (save_setup_config uses home_dir which we can't mock easily)

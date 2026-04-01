@@ -2,61 +2,217 @@
   {
     "model": "devstral-small-2:24b",
     "size_label": "24B",
-    "description": "Mistral's coding agent model. Excels at tool use, codebase exploration, multi-file editing.",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "Mistral coding agent. Best-in-class tool use and multi-file editing.",
     "estimated_ram_gb": 16.0
+  },
+  {
+    "model": "devstral-2:123b",
+    "size_label": "123B",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "Mistral's largest coding model. Exceptional agentic capabilities.",
+    "estimated_ram_gb": 80.0
   },
   {
     "model": "qwen3-coder:30b-a3b",
     "size_label": "30B (3B active)",
-    "description": "Alibaba's coding MoE. Only 3B active params, 128K context, strong tool calling.",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "Alibaba coding MoE. 128K context, strong tool calling, efficient.",
     "estimated_ram_gb": 20.0
   },
   {
-    "model": "glm-4.7-flash:30b",
-    "size_label": "30B",
-    "description": "Zhipu's efficient model. Strong planning, multi-step tool use, code generation.",
-    "estimated_ram_gb": 20.0
+    "model": "qwen3-coder-next",
+    "size_label": "80B (3B active)",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "Next-gen Qwen coder. 256K context, 3B active params.",
+    "estimated_ram_gb": 50.0
+  },
+  {
+    "model": "rnj-1:8b",
+    "size_label": "8B",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "Dense coding model on par with SOTA. Optimized for code and STEM.",
+    "estimated_ram_gb": 5.0
+  },
+  {
+    "model": "qwen3.5:122b",
+    "size_label": "122B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Qwen flagship. Multimodal, strong reasoning, tool calling.",
+    "estimated_ram_gb": 80.0
+  },
+  {
+    "model": "qwen3.5:35b",
+    "size_label": "35B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Qwen large. Great quality/speed balance with tool calling.",
+    "estimated_ram_gb": 24.0
   },
   {
     "model": "qwen3.5:27b",
     "size_label": "27B",
-    "description": "Latest Qwen multimodal. Tool calling, 128K context, strong reasoning.",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Qwen multimodal. Tool calling, 128K context, strong reasoning.",
     "estimated_ram_gb": 18.0
   },
   {
     "model": "qwen3.5:9b",
     "size_label": "9B",
-    "description": "Good quality/speed balance. Tool calling support, multimodal.",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Good quality/speed balance. Tool calling, multimodal.",
     "estimated_ram_gb": 6.0
   },
   {
     "model": "qwen3.5:4b",
     "size_label": "4B",
+    "category": "general",
+    "tool_calling": true,
     "description": "Fast and lightweight. Tool calling, suitable for 8GB machines.",
     "estimated_ram_gb": 3.0
   },
   {
     "model": "qwen3.5:2b",
     "size_label": "2B",
+    "category": "general",
+    "tool_calling": true,
     "description": "Minimal resources. Basic tool calling, fast responses.",
     "estimated_ram_gb": 1.5
   },
   {
+    "model": "qwen3.5:0.8b",
+    "size_label": "0.8B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Ultra-light. For very constrained environments.",
+    "estimated_ram_gb": 0.8
+  },
+  {
     "model": "llama3.3:70b",
     "size_label": "70B",
-    "description": "Meta's largest Llama. Strong coding + tool calling. Needs 48GB+ memory.",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Meta's largest Llama. Strong coding and tool calling.",
     "estimated_ram_gb": 48.0
+  },
+  {
+    "model": "llama3.2:3b",
+    "size_label": "3B",
+    "category": "general",
+    "tool_calling": false,
+    "description": "Meta's small Llama. Fast but limited tool calling support.",
+    "estimated_ram_gb": 2.0
+  },
+  {
+    "model": "llama3.2:1b",
+    "size_label": "1B",
+    "category": "general",
+    "tool_calling": false,
+    "description": "Meta's tiny Llama. Chat-only, no tool calling.",
+    "estimated_ram_gb": 1.0
+  },
+  {
+    "model": "glm-5:744b",
+    "size_label": "744B (40B active)",
+    "category": "reasoning",
+    "tool_calling": true,
+    "description": "Zhipu flagship MoE. Complex systems engineering and long-horizon tasks.",
+    "estimated_ram_gb": 200.0
+  },
+  {
+    "model": "glm-4.7-flash:30b",
+    "size_label": "30B",
+    "category": "reasoning",
+    "tool_calling": true,
+    "description": "Zhipu efficient reasoning. Strong planning, multi-step tool use.",
+    "estimated_ram_gb": 20.0
   },
   {
     "model": "nemotron-cascade-2:30b",
     "size_label": "30B (3B active)",
-    "description": "NVIDIA's MoE. Strong reasoning and agentic capabilities, 3B active params.",
+    "category": "reasoning",
+    "tool_calling": true,
+    "description": "NVIDIA MoE. Strong reasoning and agentic capabilities.",
     "estimated_ram_gb": 20.0
+  },
+  {
+    "model": "nemotron-3-super:120b",
+    "size_label": "120B (12B active)",
+    "category": "reasoning",
+    "tool_calling": true,
+    "description": "NVIDIA large MoE. Complex multi-agent applications.",
+    "estimated_ram_gb": 80.0
+  },
+  {
+    "model": "nemotron-3-nano:4b",
+    "size_label": "4B",
+    "category": "reasoning",
+    "tool_calling": true,
+    "description": "NVIDIA efficient agent model. Good for on-device agentic tasks.",
+    "estimated_ram_gb": 3.0
+  },
+  {
+    "model": "ministral-3:14b",
+    "size_label": "14B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Mistral edge model. Designed for on-device deployment.",
+    "estimated_ram_gb": 10.0
   },
   {
     "model": "ministral-3:8b",
     "size_label": "8B",
-    "description": "Mistral's edge model. Designed for on-device deployment with tool calling.",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Mistral small edge model. Tool calling on resource-limited hardware.",
     "estimated_ram_gb": 5.0
+  },
+  {
+    "model": "ministral-3:3b",
+    "size_label": "3B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Mistral tiny edge model. Minimal footprint with tool calling.",
+    "estimated_ram_gb": 2.0
+  },
+  {
+    "model": "olmo-3.1:32b",
+    "size_label": "32B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "AI2 open model. Fully open weights and training data.",
+    "estimated_ram_gb": 22.0
+  },
+  {
+    "model": "lfm2:24b",
+    "size_label": "24B",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Liquid AI hybrid model. Designed for on-device deployment.",
+    "estimated_ram_gb": 16.0
+  },
+  {
+    "model": "kimi-k2.5",
+    "size_label": "MoE",
+    "category": "general",
+    "tool_calling": true,
+    "description": "Moonshot multimodal agent. Vision + language + tool use.",
+    "estimated_ram_gb": 40.0
+  },
+  {
+    "model": "minimax-m2.7",
+    "size_label": "Large",
+    "category": "coding",
+    "tool_calling": true,
+    "description": "MiniMax coding and agentic workflows model.",
+    "estimated_ram_gb": 40.0
   }
 ]

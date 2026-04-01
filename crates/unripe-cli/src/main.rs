@@ -43,6 +43,18 @@ enum Commands {
         #[arg(long, default_value = "medium")]
         performance: String,
 
+        /// Model category: coding, general, reasoning
+        #[arg(long, default_value = "coding")]
+        category: String,
+
+        /// Install a specific model by name (e.g. qwen3.5:9b)
+        #[arg(long)]
+        install: Option<String>,
+
+        /// List all available models grouped by category
+        #[arg(long)]
+        list: bool,
+
         /// Skip interactive prompts, auto-accept recommendations
         #[arg(long)]
         yes: bool,
@@ -145,21 +157,86 @@ fn build_provider(
     }
 }
 
-async fn run_setup(performance: &str, auto_yes: bool) -> anyhow::Result<()> {
+async fn run_setup(
+    performance: &str,
+    category: &str,
+    install_model: Option<&str>,
+    list: bool,
+    auto_yes: bool,
+) -> anyhow::Result<()> {
     use unripe_setup::{
         download::{check_ollama, is_model_available, pull_model},
-        recommend::{recommend, PerformancePreference},
+        recommend::{
+            available_models, format_model_list, recommend_for_category, ModelCategory,
+            PerformancePreference,
+        },
         sysinfo_detect::SystemInfo,
     };
 
     eprintln!("\x1b[1m== my-little-claude setup ==\x1b[0m\n");
 
-    // Step 1: Detect system
-    eprintln!("\x1b[36m[1/4] Detecting system hardware...\x1b[0m");
     let sys = SystemInfo::detect();
+
+    // --list: show all models and exit
+    if list {
+        eprintln!("  System: {}\n", sys.summary());
+        let models = available_models();
+        eprintln!("  Available models ({} total):\n", models.len());
+        eprint!("{}", format_model_list(&models, Some(&sys)));
+        return Ok(());
+    }
+
+    // --install: install a specific model
+    if let Some(model_name) = install_model {
+        eprintln!("\x1b[36mInstalling model: {model_name}\x1b[0m");
+
+        let ollama_status = check_ollama();
+        if !ollama_status.is_installed() {
+            eprintln!("\x1b[31mollama is not installed.\x1b[0m");
+            eprintln!("Install it from: https://ollama.com/download");
+            return Ok(());
+        }
+
+        if is_model_available(model_name) {
+            eprintln!("  Model {model_name} is already available.");
+        } else {
+            eprintln!("  Pulling {model_name} (this may take a while)...");
+            match pull_model(model_name).await? {
+                unripe_setup::download::PullResult::Success => {
+                    eprintln!("  \x1b[32mDownload complete.\x1b[0m");
+                }
+                unripe_setup::download::PullResult::Failed(err) => {
+                    eprintln!("  \x1b[31mDownload failed: {err}\x1b[0m");
+                    return Ok(());
+                }
+            }
+        }
+
+        // Find model in catalog to save config
+        let rec = available_models()
+            .into_iter()
+            .find(|m| m.model == model_name)
+            .unwrap_or(unripe_setup::ModelRecommendation {
+                model: model_name.to_string(),
+                size_label: "?".into(),
+                category: ModelCategory::General,
+                tool_calling: false,
+                description: "User-specified model".into(),
+                estimated_ram_gb: 0.0,
+            });
+
+        let pref = PerformancePreference::Medium;
+        let config_path = unripe_setup::download::save_setup_config(&sys, &pref, &rec)?;
+        eprintln!("\n\x1b[32mSetup complete!\x1b[0m Default model set to {model_name}");
+        eprintln!("  Config: {}", config_path.display());
+        return Ok(());
+    }
+
+    // Auto-recommend flow
+    eprintln!("\x1b[36m[1/4] Detecting system hardware...\x1b[0m");
     eprintln!("  {}", sys.summary());
 
-    // Step 2: Parse preference
+    // Parse preference
     let pref = match performance.to_lowercase().as_str() {
         "high" | "h" => PerformancePreference::High,
         "medium" | "med" | "m" => PerformancePreference::Medium,
@@ -169,12 +246,32 @@ async fn run_setup(performance: &str, auto_yes: bool) -> anyhow::Result<()> {
             PerformancePreference::Medium
         }
     };
-    eprintln!("\n\x1b[36m[2/4] Performance preference: {}\x1b[0m", pref);
 
-    // Step 3: Recommend model
-    let rec = recommend(&sys, pref);
+    // Parse category
+    let cat = match category.to_lowercase().as_str() {
+        "coding" | "code" | "c" => ModelCategory::Coding,
+        "general" | "gen" | "g" => ModelCategory::General,
+        "reasoning" | "reason" | "r" => ModelCategory::Reasoning,
+        other => {
+            eprintln!("\x1b[33mUnknown category '{other}', using coding\x1b[0m");
+            ModelCategory::Coding
+        }
+    };
+
+    eprintln!(
+        "\n\x1b[36m[2/4] Preference: {} | Category: {}\x1b[0m",
+        pref, cat
+    );
+
+    // Recommend model
+    let rec = recommend_for_category(&sys, pref, &cat);
     eprintln!("\n\x1b[36m[3/4] Recommended model:\x1b[0m");
     eprintln!("  {} ({})", rec.model, rec.size_label);
+    eprintln!(
+        "  Category: {} | Tool calling: {}",
+        rec.category,
+        if rec.tool_calling { "yes" } else { "no" }
+    );
     eprintln!("  {}", rec.description);
     eprintln!("  Estimated memory: {:.1}GB", rec.estimated_ram_gb);
 
@@ -186,12 +283,14 @@ async fn run_setup(performance: &str, auto_yes: bool) -> anyhow::Result<()> {
         std::io::stdin().read_line(&mut input).ok();
         let trimmed = input.trim().to_lowercase();
         if trimmed == "n" || trimmed == "no" {
-            eprintln!("Setup cancelled.");
+            eprintln!(
+                "Setup cancelled. Use --list to see all models or --install <model> to pick one."
+            );
             return Ok(());
         }
     }
 
-    // Step 4: Check ollama and pull
+    // Check ollama and pull
     eprintln!("\n\x1b[36m[4/4] Downloading model...\x1b[0m");
 
     let ollama_status = check_ollama();
@@ -234,8 +333,15 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Handle setup subcommand
-    if let Some(Commands::Setup { performance, yes }) = &cli.command {
-        return run_setup(performance, *yes).await;
+    if let Some(Commands::Setup {
+        performance,
+        category,
+        install,
+        list,
+        yes,
+    }) = &cli.command
+    {
+        return run_setup(performance, category, install.as_deref(), *list, *yes).await;
     }
 
     // Agent mode

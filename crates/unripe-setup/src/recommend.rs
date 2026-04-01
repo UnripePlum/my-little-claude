@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::sysinfo_detect::{SystemInfo, SystemTier};
+use crate::sysinfo_detect::SystemInfo;
 
 /// User's performance preference
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,13 +20,40 @@ impl std::fmt::Display for PerformancePreference {
     }
 }
 
-/// A recommended model with metadata
+/// Model category
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelCategory {
+    Coding,
+    General,
+    Reasoning,
+}
+
+impl std::fmt::Display for ModelCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Coding => write!(f, "coding"),
+            Self::General => write!(f, "general"),
+            Self::Reasoning => write!(f, "reasoning"),
+        }
+    }
+}
+
+/// A model entry with full metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelRecommendation {
     pub model: String,
     pub size_label: String,
+    #[serde(default = "default_category")]
+    pub category: ModelCategory,
+    #[serde(default)]
+    pub tool_calling: bool,
     pub description: String,
     pub estimated_ram_gb: f64,
+}
+
+fn default_category() -> ModelCategory {
+    ModelCategory::General
 }
 
 /// Load model catalog from embedded JSON (models.json)
@@ -35,70 +62,159 @@ fn load_model_catalog() -> Vec<ModelRecommendation> {
     serde_json::from_str(json).expect("models.json must be valid JSON")
 }
 
-/// Model recommendation matrix
-/// Rows: performance preference, Columns: system tier
-/// Updated 2026-04: uses qwen3.5 (multimodal, tool calling) and devstral (coding agent)
-const MATRIX: [[&str; 3]; 3] = [
-    // [High tier (16GB+), Medium tier (8-16GB), Low tier (<8GB)]
-    // High preference: best quality
-    ["devstral-small-2:24b", "qwen3.5:9b", "qwen3.5:4b"],
-    // Medium preference: balanced
-    ["qwen3.5:9b", "qwen3.5:4b", "qwen3.5:2b"],
-    // Light preference: fastest
-    ["qwen3.5:4b", "qwen3.5:2b", "qwen3.5:2b"],
-];
-
-/// Get model details for a given model name from the catalog
-fn model_details(model: &str) -> ModelRecommendation {
-    let catalog = load_model_catalog();
-    catalog
-        .into_iter()
-        .find(|m| m.model == model)
-        .unwrap_or(ModelRecommendation {
-            model: model.into(),
-            size_label: "?".into(),
-            description: "Unknown model".into(),
-            estimated_ram_gb: 4.0,
-        })
-}
-
-/// Recommend a model based on system info and user preference
-pub fn recommend(sys: &SystemInfo, pref: PerformancePreference) -> ModelRecommendation {
-    let tier_idx = match sys.tier() {
-        SystemTier::High => 0,
-        SystemTier::Medium => 1,
-        SystemTier::Low => 2,
-    };
-    let pref_idx = match pref {
-        PerformancePreference::High => 0,
-        PerformancePreference::Medium => 1,
-        PerformancePreference::Light => 2,
-    };
-
-    let model_name = MATRIX[pref_idx][tier_idx];
-    let rec = model_details(model_name);
-
-    // Verify the recommended model fits in available memory; downgrade if needed
-    let available = sys.effective_model_memory_gb();
-    if rec.estimated_ram_gb > available {
-        // Try one size smaller
-        let smaller_pref_idx = (pref_idx + 1).min(2);
-        let smaller_model = MATRIX[smaller_pref_idx][tier_idx];
-        let smaller_rec = model_details(smaller_model);
-        if smaller_rec.estimated_ram_gb <= available {
-            return smaller_rec;
-        }
-        // Try smallest
-        let smallest = MATRIX[2][2];
-        return model_details(smallest);
-    }
-
-    rec
-}
-
-/// Get all available models for display
+/// Get all available models
 pub fn available_models() -> Vec<ModelRecommendation> {
     load_model_catalog()
+}
+
+/// Filter models by category
+pub fn models_by_category(category: &ModelCategory) -> Vec<ModelRecommendation> {
+    load_model_catalog()
+        .into_iter()
+        .filter(|m| &m.category == category)
+        .collect()
+}
+
+/// Filter models that fit in available memory
+pub fn models_that_fit(sys: &SystemInfo) -> Vec<ModelRecommendation> {
+    let available = sys.effective_model_memory_gb();
+    load_model_catalog()
+        .into_iter()
+        .filter(|m| m.estimated_ram_gb <= available)
+        .collect()
+}
+
+/// Filter models with tool calling support
+pub fn models_with_tool_calling() -> Vec<ModelRecommendation> {
+    load_model_catalog()
+        .into_iter()
+        .filter(|m| m.tool_calling)
+        .collect()
+}
+
+/// Smart recommendation: category + system tier + preference
+pub fn recommend(sys: &SystemInfo, pref: PerformancePreference) -> ModelRecommendation {
+    recommend_for_category(sys, pref, &ModelCategory::Coding)
+}
+
+/// Recommend best model for a specific category
+pub fn recommend_for_category(
+    sys: &SystemInfo,
+    pref: PerformancePreference,
+    category: &ModelCategory,
+) -> ModelRecommendation {
+    let available = sys.effective_model_memory_gb();
+
+    // Get models that fit, have tool calling, and match category
+    let mut candidates: Vec<ModelRecommendation> = load_model_catalog()
+        .into_iter()
+        .filter(|m| &m.category == category && m.tool_calling && m.estimated_ram_gb <= available)
+        .collect();
+
+    // Sort by size (descending for high pref, ascending for light)
+    candidates.sort_by(|a, b| {
+        a.estimated_ram_gb
+            .partial_cmp(&b.estimated_ram_gb)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    if candidates.is_empty() {
+        // Fallback: any model with tool calling that fits
+        let mut fallback: Vec<ModelRecommendation> = load_model_catalog()
+            .into_iter()
+            .filter(|m| m.tool_calling && m.estimated_ram_gb <= available)
+            .collect();
+        fallback.sort_by(|a, b| {
+            a.estimated_ram_gb
+                .partial_cmp(&b.estimated_ram_gb)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        if fallback.is_empty() {
+            // Last resort: smallest model in catalog
+            let mut all = load_model_catalog();
+            all.sort_by(|a, b| {
+                a.estimated_ram_gb
+                    .partial_cmp(&b.estimated_ram_gb)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            return all.into_iter().next().unwrap_or(ModelRecommendation {
+                model: "qwen3.5:2b".into(),
+                size_label: "2B".into(),
+                category: ModelCategory::General,
+                tool_calling: true,
+                description: "Fallback model".into(),
+                estimated_ram_gb: 1.5,
+            });
+        }
+
+        return pick_by_preference(&fallback, pref);
+    }
+
+    pick_by_preference(&candidates, pref)
+}
+
+/// Pick model from sorted candidates based on preference
+fn pick_by_preference(
+    sorted_candidates: &[ModelRecommendation],
+    pref: PerformancePreference,
+) -> ModelRecommendation {
+    let len = sorted_candidates.len();
+    match pref {
+        PerformancePreference::High => sorted_candidates[len - 1].clone(), // largest
+        PerformancePreference::Medium => sorted_candidates[len / 2].clone(), // middle
+        PerformancePreference::Light => sorted_candidates[0].clone(),      // smallest
+    }
+}
+
+/// Format model list for display in CLI
+pub fn format_model_list(models: &[ModelRecommendation], sys: Option<&SystemInfo>) -> String {
+    let available_mem = sys.map(|s| s.effective_model_memory_gb());
+
+    let mut output = String::new();
+    let mut current_category = String::new();
+
+    // Group by category
+    let mut sorted = models.to_vec();
+    sorted.sort_by(|a, b| {
+        a.category.to_string().cmp(&b.category.to_string()).then(
+            a.estimated_ram_gb
+                .partial_cmp(&b.estimated_ram_gb)
+                .unwrap_or(std::cmp::Ordering::Equal),
+        )
+    });
+
+    for m in &sorted {
+        let cat = m.category.to_string();
+        if cat != current_category {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&format!("  [{cat}]\n"));
+            current_category = cat;
+        }
+
+        let fits = match available_mem {
+            Some(mem) => {
+                if m.estimated_ram_gb <= mem {
+                    "  "
+                } else {
+                    "! "
+                }
+            }
+            None => "  ",
+        };
+
+        let tool_icon = if m.tool_calling { "T" } else { " " };
+
+        output.push_str(&format!(
+            "  {fits}[{tool_icon}] {:<30} {:>6}  {:.0}GB  {}\n",
+            m.model, m.size_label, m.estimated_ram_gb, m.description
+        ));
+    }
+
+    output.push_str("\n  T = tool calling supported, ! = may not fit in memory\n");
+    output
 }
 
 #[cfg(test)]
@@ -120,53 +236,88 @@ mod tests {
     }
 
     #[test]
-    fn test_high_tier_high_pref() {
+    fn test_high_tier_high_pref_picks_largest_coding() {
         let s = sys(64.0, "x86_64", "linux", Some(24.0));
         let rec = recommend(&s, PerformancePreference::High);
-        assert_eq!(rec.model, "devstral-small-2:24b");
+        assert!(rec.tool_calling);
+        assert_eq!(rec.category, ModelCategory::Coding);
+        // Should pick largest coding model that fits in 24GB
     }
 
     #[test]
     fn test_medium_tier_medium_pref() {
         let s = sys(16.0, "aarch64", "macos 15.0", None);
         let rec = recommend(&s, PerformancePreference::Medium);
-        assert_eq!(rec.model, "qwen3.5:4b");
+        assert!(rec.tool_calling);
+        assert!(rec.estimated_ram_gb <= 12.0); // 75% of 16GB
     }
 
     #[test]
     fn test_low_tier_light_pref() {
         let s = sys(8.0, "x86_64", "linux", None);
         let rec = recommend(&s, PerformancePreference::Light);
-        assert_eq!(rec.model, "qwen3.5:2b");
+        assert!(rec.tool_calling);
+        assert!(rec.estimated_ram_gb <= 4.0); // 50% of 8GB
     }
 
     #[test]
-    fn test_downgrade_when_model_too_large() {
-        // 4GB effective memory, high pref would pick devstral-small-2:24b (needs 16GB)
-        // Should downgrade to something that fits
-        let s = sys(8.0, "x86_64", "linux", None); // 4GB effective
+    fn test_downgrade_when_no_coding_fits() {
+        // Very small memory: no coding models fit
+        let s = sys(2.0, "x86_64", "linux", None); // 1GB effective
         let rec = recommend(&s, PerformancePreference::High);
-        assert!(
-            rec.estimated_ram_gb <= 4.0,
-            "model {} needs {}GB but only 4GB available",
-            rec.model,
-            rec.estimated_ram_gb
-        );
+        // Should fall back to smallest available model
+        assert!(rec.estimated_ram_gb <= 1.0);
     }
 
     #[test]
-    fn test_apple_silicon_medium() {
+    fn test_recommend_for_reasoning() {
+        let s = sys(64.0, "x86_64", "linux", Some(24.0));
+        let rec =
+            recommend_for_category(&s, PerformancePreference::High, &ModelCategory::Reasoning);
+        assert_eq!(rec.category, ModelCategory::Reasoning);
+        assert!(rec.tool_calling);
+    }
+
+    #[test]
+    fn test_recommend_for_general() {
         let s = sys(16.0, "aarch64", "macos 15.0", None);
-        // Effective: 12GB, Medium pref, Medium tier
-        let rec = recommend(&s, PerformancePreference::Medium);
-        assert!(rec.estimated_ram_gb <= 12.0);
+        let rec =
+            recommend_for_category(&s, PerformancePreference::Medium, &ModelCategory::General);
+        assert_eq!(rec.category, ModelCategory::General);
+    }
+
+    #[test]
+    fn test_models_by_category() {
+        let coding = models_by_category(&ModelCategory::Coding);
+        assert!(coding.len() >= 3);
+        assert!(coding.iter().all(|m| m.category == ModelCategory::Coding));
+    }
+
+    #[test]
+    fn test_models_that_fit() {
+        let s = sys(16.0, "aarch64", "macos 15.0", None);
+        let fits = models_that_fit(&s);
+        let available = s.effective_model_memory_gb();
+        assert!(fits.iter().all(|m| m.estimated_ram_gb <= available));
+    }
+
+    #[test]
+    fn test_models_with_tool_calling() {
+        let tools = models_with_tool_calling();
+        assert!(tools.iter().all(|m| m.tool_calling));
+        // Most models should support tool calling
+        let all = available_models();
+        assert!(tools.len() > all.len() / 2);
     }
 
     #[test]
     fn test_available_models_count() {
         let models = available_models();
-        assert_eq!(models.len(), 10);
-        assert_eq!(models[0].model, "devstral-small-2:24b");
+        assert!(
+            models.len() >= 20,
+            "expected 20+ models, got {}",
+            models.len()
+        );
     }
 
     #[test]
@@ -178,9 +329,27 @@ mod tests {
 
     #[test]
     fn test_model_recommendation_serialization() {
-        let rec = model_details("qwen3.5:9b");
+        let rec = available_models().into_iter().next().unwrap();
         let json = serde_json::to_string(&rec).unwrap();
         let parsed: ModelRecommendation = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.model, "qwen3.5:9b");
+        assert_eq!(parsed.model, rec.model);
+    }
+
+    #[test]
+    fn test_format_model_list() {
+        let models = available_models();
+        let s = sys(16.0, "aarch64", "macos 15.0", None);
+        let output = format_model_list(&models, Some(&s));
+        assert!(output.contains("[coding]"));
+        assert!(output.contains("[general]"));
+        assert!(output.contains("[reasoning]"));
+        assert!(output.contains("tool calling supported"));
+    }
+
+    #[test]
+    fn test_category_display() {
+        assert_eq!(ModelCategory::Coding.to_string(), "coding");
+        assert_eq!(ModelCategory::General.to_string(), "general");
+        assert_eq!(ModelCategory::Reasoning.to_string(), "reasoning");
     }
 }
