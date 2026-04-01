@@ -316,13 +316,17 @@ cargo fmt --all -- --check
 
 ## Roadmap
 
-### Next
+### v0.3 (next)
 
-- Tower-style middleware pipeline -- composable agent behaviors, "the Axum of agents"
-- Deterministic session replay -- record and replay agent sessions with different models
-- MCP client support
-- Rich TUI with ratatui
-- Chat-only fallback for models without tool calling
+- Interactive REPL -- conversational loop, not one-shot
+- Edit tool -- precise string replacement (old→new), not full file overwrite
+- Sub-agents -- split complex tasks into parallel workstreams
+- Hooks system -- PreToolUse/PostToolUse event automation
+- CLAUDE.md 4-level hierarchy (managed→user→project→local)
+- Skills system -- markdown-based reusable prompts as slash commands
+- Checkpoints -- snapshot before edits, undo on failure
+- Non-interactive mode (`--print`) for CI/scripting
+- WebFetch/WebSearch tools
 
 ## License
 
