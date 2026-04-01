@@ -25,6 +25,9 @@
 
 ---
 
+<!-- TODO: Replace with actual asciinema recording -->
+<!-- [![demo](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX) -->
+
 my-little-claude is both a **working coding agent** and a **crate ecosystem** for building your own.
 
 Three providers (Anthropic, OpenAI, ollama), five tools, a tiered permission system, and session persistence. Swap models with a flag. Add custom providers, tools, or permission policies by implementing a trait.
