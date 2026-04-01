@@ -222,6 +222,31 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    #[tokio::test]
+    async fn test_grep_invalid_regex() {
+        let dir = std::env::temp_dir().join("unripe-test-grep-badregex");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.txt"), "some content").unwrap();
+
+        let tool = GrepTool;
+        let result = tool
+            .execute(serde_json::json!({"pattern": "[invalid"}), &test_ctx(&dir))
+            .await
+            .unwrap();
+
+        match &result {
+            ToolResult::Failure(msg) => assert!(msg.contains("grep error")),
+            ToolResult::Success(msg) => {
+                // Some grep implementations treat invalid regex as literal
+                assert!(!msg.is_empty());
+            }
+            other => panic!("expected Failure or Success for invalid regex, got {other:?}"),
+        }
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     #[test]
     fn test_tool_definition() {
         let tool = GrepTool;

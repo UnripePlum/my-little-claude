@@ -152,6 +152,7 @@ impl LlmProvider for OpenAiProvider {
         let mut body = serde_json::json!({
             "model": self.model,
             "messages": api_messages,
+            "max_tokens": config.max_tokens,
             "max_completion_tokens": config.max_tokens,
         });
 
@@ -203,6 +204,7 @@ impl LlmProvider for OpenAiProvider {
         let mut body = serde_json::json!({
             "model": self.model,
             "messages": api_messages,
+            "max_tokens": config.max_tokens,
             "max_completion_tokens": config.max_tokens,
             "stream": true,
         });
