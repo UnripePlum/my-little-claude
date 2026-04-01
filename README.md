@@ -1,8 +1,8 @@
-# unripe-claude
+# my-little-claude
 
 A model-agnostic coding agent harness written in Rust. Use any LLM — Anthropic Claude, local models via ollama, or bring your own provider.
 
-unripe-claude is both a working coding agent **and** a crate ecosystem you can build on.
+my-little-claude is both a working coding agent **and** a crate ecosystem you can build on.
 
 ## Quick Start
 
@@ -27,8 +27,8 @@ cargo install unripe-cli
 Or build from source:
 
 ```bash
-git clone https://github.com/unripeplum/unripe-claude
-cd unripe-claude
+git clone https://github.com/unripeplum/my-little-claude
+cd my-little-claude
 cargo build --release
 # Binary at target/release/unripe
 ```
@@ -135,7 +135,7 @@ impl Tool for MyTool {
 
 ## Permission System
 
-unripe-claude has a tiered permission system:
+my-little-claude has a tiered permission system:
 
 | Action | Inside project | Outside project |
 |--------|---------------|-----------------|

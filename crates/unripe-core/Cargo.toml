@@ -3,7 +3,7 @@ name = "unripe-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Core traits and types for the unripe-claude agent harness"
+description = "Core traits and types for the my-little-claude agent harness"
 
 [dependencies]
 anyhow.workspace = true

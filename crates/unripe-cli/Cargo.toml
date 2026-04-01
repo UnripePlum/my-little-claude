@@ -3,7 +3,7 @@ name = "unripe-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CLI binary for unripe-claude agent"
+description = "CLI binary for my-little-claude agent"
 
 [[bin]]
 name = "unripe"

@@ -1,4 +1,4 @@
-# unripe-claude Development Log
+# my-little-claude Development Log
 
 ## Day 1: unripe-core traits (2026-04-01)
 

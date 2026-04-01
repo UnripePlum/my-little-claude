@@ -12,7 +12,7 @@ use unripe_engine::engine::{AgentEngine, EngineCallbacks};
 #[command(
     name = "unripe",
     version,
-    about = "unripe-claude — a model-agnostic coding agent"
+    about = "my-little-claude — a model-agnostic coding agent"
 )]
 struct Cli {
     /// The prompt to send to the agent
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
     let provider = build_provider(provider_name, model, &config)?;
 
     eprintln!(
-        "\x1b[90munripe-claude v{} | {} / {}\x1b[0m",
+        "\x1b[90mmy-little-claude v{} | {} / {}\x1b[0m",
         env!("CARGO_PKG_VERSION"),
         provider_name,
         model

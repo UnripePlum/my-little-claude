@@ -3,7 +3,7 @@ name = "unripe-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Agent engine loop for unripe-claude"
+description = "Agent engine loop for my-little-claude"
 
 [dependencies]
 unripe-core = { path = "../unripe-core" }
