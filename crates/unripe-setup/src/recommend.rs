@@ -29,6 +29,12 @@ pub struct ModelRecommendation {
     pub estimated_ram_gb: f64,
 }
 
+/// Load model catalog from embedded JSON (models.json)
+fn load_model_catalog() -> Vec<ModelRecommendation> {
+    let json = include_str!("../models.json");
+    serde_json::from_str(json).expect("models.json must be valid JSON")
+}
+
 /// Model recommendation matrix
 /// Rows: performance preference, Columns: system tier
 const MATRIX: [[&str; 3]; 3] = [
@@ -41,46 +47,18 @@ const MATRIX: [[&str; 3]; 3] = [
     ["qwen2.5-coder:7b", "qwen2.5-coder:3b", "qwen2.5-coder:1.5b"],
 ];
 
-/// Get model details for a given model name
+/// Get model details for a given model name from the catalog
 fn model_details(model: &str) -> ModelRecommendation {
-    match model {
-        "qwen2.5-coder:32b" => ModelRecommendation {
-            model: model.into(),
-            size_label: "32B".into(),
-            description: "Largest, best quality. Needs 20GB+ memory.".into(),
-            estimated_ram_gb: 20.0,
-        },
-        "qwen2.5-coder:14b" => ModelRecommendation {
-            model: model.into(),
-            size_label: "14B".into(),
-            description: "Strong quality with good speed. Needs 10GB+ memory.".into(),
-            estimated_ram_gb: 10.0,
-        },
-        "qwen2.5-coder:7b" => ModelRecommendation {
-            model: model.into(),
-            size_label: "7B".into(),
-            description: "Good balance of quality and speed. Needs 5GB+ memory.".into(),
-            estimated_ram_gb: 5.0,
-        },
-        "qwen2.5-coder:3b" => ModelRecommendation {
-            model: model.into(),
-            size_label: "3B".into(),
-            description: "Fast responses, moderate quality. Needs 2.5GB+ memory.".into(),
-            estimated_ram_gb: 2.5,
-        },
-        "qwen2.5-coder:1.5b" => ModelRecommendation {
-            model: model.into(),
-            size_label: "1.5B".into(),
-            description: "Fastest, minimal resources. Needs 1.5GB+ memory.".into(),
-            estimated_ram_gb: 1.5,
-        },
-        _ => ModelRecommendation {
+    let catalog = load_model_catalog();
+    catalog
+        .into_iter()
+        .find(|m| m.model == model)
+        .unwrap_or(ModelRecommendation {
             model: model.into(),
             size_label: "?".into(),
             description: "Unknown model".into(),
             estimated_ram_gb: 4.0,
-        },
-    }
+        })
 }
 
 /// Recommend a model based on system info and user preference
@@ -119,13 +97,7 @@ pub fn recommend(sys: &SystemInfo, pref: PerformancePreference) -> ModelRecommen
 
 /// Get all available models for display
 pub fn available_models() -> Vec<ModelRecommendation> {
-    vec![
-        model_details("qwen2.5-coder:32b"),
-        model_details("qwen2.5-coder:14b"),
-        model_details("qwen2.5-coder:7b"),
-        model_details("qwen2.5-coder:3b"),
-        model_details("qwen2.5-coder:1.5b"),
-    ]
+    load_model_catalog()
 }
 
 #[cfg(test)]

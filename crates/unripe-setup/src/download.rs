@@ -36,10 +36,19 @@ pub fn is_model_available(model: &str) -> bool {
     match std::process::Command::new("ollama").arg("list").output() {
         Ok(output) if output.status.success() => {
             let text = String::from_utf8_lossy(&output.stdout);
-            text.lines().any(|line| line.contains(model))
+            parse_ollama_list(&text, model)
         }
         _ => false,
     }
+}
+
+/// Parse `ollama list` output and check if the model name matches exactly
+/// Format: "NAME:TAG    SIZE    MODIFIED"
+fn parse_ollama_list(output: &str, model: &str) -> bool {
+    output
+        .lines()
+        .skip(1)
+        .any(|line| line.split_whitespace().next() == Some(model))
 }
 
 /// Pull a model via ollama. Returns the child process for progress tracking.
@@ -66,10 +75,10 @@ pub enum PullResult {
     Failed(String),
 }
 
-/// Save the setup results to config.toml
+/// Save the setup results to config.toml, including system detection info
 pub fn save_setup_config(
-    _sys: &crate::sysinfo_detect::SystemInfo,
-    _pref: &crate::recommend::PerformancePreference,
+    sys: &crate::sysinfo_detect::SystemInfo,
+    pref: &crate::recommend::PerformancePreference,
     rec: &ModelRecommendation,
 ) -> anyhow::Result<PathBuf> {
     let config_dir = dirs::home_dir()
@@ -84,6 +93,13 @@ pub fn save_setup_config(
     // Update with setup results
     config.provider.default_provider = "ollama".into();
     config.provider.default_model = rec.model.clone();
+
+    // Persist system detection info
+    config.setup.ram_gb = Some(sys.ram_gb);
+    config.setup.cpu_cores = Some(sys.cpu_cores);
+    config.setup.gpu = sys.gpu.as_ref().map(|g| g.name.clone());
+    config.setup.tier = Some(format!("{:?}", sys.tier()));
+    config.setup.performance = Some(pref.to_string());
 
     config.save_to_path(&config_path)?;
 
@@ -108,6 +124,24 @@ mod tests {
     fn test_ollama_status_is_installed() {
         assert!(OllamaStatus::Installed("0.5.0".into()).is_installed());
         assert!(!OllamaStatus::NotInstalled.is_installed());
+    }
+
+    #[test]
+    fn test_parse_ollama_list_exact_match() {
+        let output = "NAME                ID              SIZE      MODIFIED\n\
+                       llama3.2:3b         a80c4f17acd5    2.0 GB    5 days ago\n\
+                       qwen2.5-coder:7b    abc123def456    4.7 GB    2 days ago\n";
+        assert!(parse_ollama_list(output, "qwen2.5-coder:7b"));
+        assert!(parse_ollama_list(output, "llama3.2:3b"));
+        assert!(!parse_ollama_list(output, "qwen2.5-coder:7b-instruct"));
+        assert!(!parse_ollama_list(output, "qwen2.5-coder:14b"));
+        assert!(!parse_ollama_list(output, "nonexistent:latest"));
+    }
+
+    #[test]
+    fn test_parse_ollama_list_empty() {
+        let output = "NAME                ID              SIZE      MODIFIED\n";
+        assert!(!parse_ollama_list(output, "any-model:latest"));
     }
 
     #[test]

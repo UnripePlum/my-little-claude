@@ -1,0 +1,32 @@
+[
+  {
+    "model": "qwen2.5-coder:32b",
+    "size_label": "32B",
+    "description": "Largest, best quality. Needs 20GB+ memory.",
+    "estimated_ram_gb": 20.0
+  },
+  {
+    "model": "qwen2.5-coder:14b",
+    "size_label": "14B",
+    "description": "Strong quality with good speed. Needs 10GB+ memory.",
+    "estimated_ram_gb": 10.0
+  },
+  {
+    "model": "qwen2.5-coder:7b",
+    "size_label": "7B",
+    "description": "Good balance of quality and speed. Needs 5GB+ memory.",
+    "estimated_ram_gb": 5.0
+  },
+  {
+    "model": "qwen2.5-coder:3b",
+    "size_label": "3B",
+    "description": "Fast responses, moderate quality. Needs 2.5GB+ memory.",
+    "estimated_ram_gb": 2.5
+  },
+  {
+    "model": "qwen2.5-coder:1.5b",
+    "size_label": "1.5B",
+    "description": "Fastest, minimal resources. Needs 1.5GB+ memory.",
+    "estimated_ram_gb": 1.5
+  }
+]

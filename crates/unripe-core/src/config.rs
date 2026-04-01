@@ -51,6 +51,21 @@ impl Default for AgentConfig {
     }
 }
 
+/// Detected system info persisted during setup
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SetupInfo {
+    #[serde(default)]
+    pub ram_gb: Option<f64>,
+    #[serde(default)]
+    pub cpu_cores: Option<usize>,
+    #[serde(default)]
+    pub gpu: Option<String>,
+    #[serde(default)]
+    pub tier: Option<String>,
+    #[serde(default)]
+    pub performance: Option<String>,
+}
+
 /// Top-level configuration file (~/.unripe/config.toml)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UnripeConfig {
@@ -59,6 +74,9 @@ pub struct UnripeConfig {
 
     #[serde(default)]
     pub provider: ProviderConfig,
+
+    #[serde(default)]
+    pub setup: SetupInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
