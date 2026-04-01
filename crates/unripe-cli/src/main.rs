@@ -155,10 +155,7 @@ async fn run_setup(performance: &str, auto_yes: bool) -> anyhow::Result<()> {
             PerformancePreference::Medium
         }
     };
-    eprintln!(
-        "\n\x1b[36m[2/4] Performance preference: {}\x1b[0m",
-        pref
-    );
+    eprintln!("\n\x1b[36m[2/4] Performance preference: {}\x1b[0m", pref);
 
     // Step 3: Recommend model
     let rec = recommend(&sys, pref);
@@ -208,15 +205,12 @@ async fn run_setup(performance: &str, auto_yes: bool) -> anyhow::Result<()> {
     }
 
     // Save config
-    let config_path =
-        unripe_setup::download::save_setup_config(&sys, &pref, &rec)?;
+    let config_path = unripe_setup::download::save_setup_config(&sys, &pref, &rec)?;
     eprintln!(
         "\n\x1b[32mSetup complete!\x1b[0m Config saved to {}",
         config_path.display()
     );
-    eprintln!(
-        "\nRun your first prompt:\n  \x1b[1munripe \"describe this project\"\x1b[0m"
-    );
+    eprintln!("\nRun your first prompt:\n  \x1b[1munripe \"describe this project\"\x1b[0m");
 
     Ok(())
 }
@@ -246,7 +240,9 @@ async fn main() -> anyhow::Result<()> {
         Some(p) => p.clone(),
         None => {
             eprintln!("Usage: unripe \"your prompt here\"");
-            eprintln!("       unripe setup              -- detect hardware and download a local model");
+            eprintln!(
+                "       unripe setup              -- detect hardware and download a local model"
+            );
             eprintln!("       unripe --provider ollama --model qwen2.5-coder:7b \"your prompt\"");
             std::process::exit(1);
         }

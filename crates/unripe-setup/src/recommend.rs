@@ -173,7 +173,12 @@ mod tests {
         // Should downgrade
         let s = sys(8.0, "x86_64", "linux", None); // 4GB effective
         let rec = recommend(&s, PerformancePreference::High);
-        assert!(rec.estimated_ram_gb <= 4.0, "model {} needs {}GB but only 4GB available", rec.model, rec.estimated_ram_gb);
+        assert!(
+            rec.estimated_ram_gb <= 4.0,
+            "model {} needs {}GB but only 4GB available",
+            rec.model,
+            rec.estimated_ram_gb
+        );
     }
 
     #[test]

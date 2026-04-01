@@ -26,7 +26,11 @@ impl SystemInfo {
         let ram_gb = sys.total_memory() as f64 / 1_073_741_824.0; // bytes to GB
         let cpu_cores = sys.cpus().len();
         let cpu_arch = std::env::consts::ARCH.to_string();
-        let os = format!("{} {}", std::env::consts::OS, System::os_version().unwrap_or_default());
+        let os = format!(
+            "{} {}",
+            std::env::consts::OS,
+            System::os_version().unwrap_or_default()
+        );
 
         let gpu = detect_gpu();
 
@@ -77,7 +81,12 @@ impl SystemInfo {
         };
         format!(
             "RAM: {:.1}GB | CPU: {}x {} | GPU: {} | OS: {} | Tier: {:?}",
-            self.ram_gb, self.cpu_cores, self.cpu_arch, gpu_str, self.os, self.tier()
+            self.ram_gb,
+            self.cpu_cores,
+            self.cpu_arch,
+            gpu_str,
+            self.os,
+            self.tier()
         )
     }
 }
@@ -124,8 +133,7 @@ fn detect_gpu() -> Option<GpuInfo> {
                     if let Some(displays) = val.get("SPDisplaysDataType").and_then(|v| v.as_array())
                     {
                         for display in displays {
-                            if let Some(name) =
-                                display.get("sppci_model").and_then(|v| v.as_str())
+                            if let Some(name) = display.get("sppci_model").and_then(|v| v.as_str())
                             {
                                 return Some(GpuInfo {
                                     name: name.to_string(),

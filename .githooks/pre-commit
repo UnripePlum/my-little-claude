@@ -1,0 +1,30 @@
+#!/bin/sh
+# Pre-commit hook: build + test + clippy + fmt check
+# Prevents committing code that fails CI
+
+set -e
+
+echo "🔍 pre-commit: running checks..."
+
+# Format check
+echo "  fmt..."
+cargo fmt --all -- --check || {
+    echo "❌ cargo fmt failed. Run: cargo fmt --all"
+    exit 1
+}
+
+# Clippy
+echo "  clippy..."
+cargo clippy --workspace -- -D warnings || {
+    echo "❌ clippy failed. Fix warnings above."
+    exit 1
+}
+
+# Tests
+echo "  test..."
+cargo test --workspace --quiet || {
+    echo "❌ tests failed."
+    exit 1
+}
+
+echo "✅ pre-commit: all checks passed."

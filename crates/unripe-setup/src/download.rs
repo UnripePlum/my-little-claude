@@ -6,7 +6,10 @@ use crate::recommend::ModelRecommendation;
 
 /// Check if ollama is installed and reachable
 pub fn check_ollama() -> OllamaStatus {
-    match std::process::Command::new("ollama").arg("--version").output() {
+    match std::process::Command::new("ollama")
+        .arg("--version")
+        .output()
+    {
         Ok(output) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             OllamaStatus::Installed(version)
