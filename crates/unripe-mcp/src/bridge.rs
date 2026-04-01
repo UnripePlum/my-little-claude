@@ -53,12 +53,44 @@ impl Tool for McpTool {
         _ctx: &ToolContext,
     ) -> anyhow::Result<ToolResult> {
         let conn = self.connection.lock().await;
-        match conn.call_tool(&self.tool_name, input).await {
+        match conn.call_tool(&self.tool_name, input.clone()).await {
             Ok(output) => Ok(ToolResult::Success(output)),
-            Err(e) => Ok(ToolResult::Failure(format!(
-                "MCP tool '{}' error: {e}",
-                self.tool_name
-            ))),
+            Err(e) => {
+                let err_str = e.to_string();
+                // Detect disconnection and attempt reconnect
+                if err_str.contains("closed")
+                    || err_str.contains("broken pipe")
+                    || err_str.contains("connection")
+                {
+                    drop(conn);
+                    // Try to reconnect
+                    let mut conn = self.connection.lock().await;
+                    match conn.reconnect().await {
+                        Ok(()) => {
+                            // Retry the call once after reconnect
+                            match conn.call_tool(&self.tool_name, input).await {
+                                Ok(output) => return Ok(ToolResult::Success(output)),
+                                Err(e2) => {
+                                    return Ok(ToolResult::Failure(format!(
+                                        "MCP server '{}' reconnected but tool '{}' still failed: {e2}",
+                                        self.server_name, self.tool_name
+                                    )));
+                                }
+                            }
+                        }
+                        Err(re) => {
+                            return Ok(ToolResult::Failure(format!(
+                                "MCP server '{}' disconnected and reconnect failed: {re}",
+                                self.server_name
+                            )));
+                        }
+                    }
+                }
+                Ok(ToolResult::Failure(format!(
+                    "MCP tool '{}' on server '{}' error: {e}",
+                    self.tool_name, self.server_name
+                )))
+            }
         }
     }
 }

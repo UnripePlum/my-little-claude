@@ -12,6 +12,7 @@ pub struct McpConnection {
     pub server_name: String,
     pub service: RunningService<rmcp::RoleClient, ()>,
     pub tools: Vec<McpToolInfo>,
+    config: McpServerConfig,
 }
 
 /// Info about a tool exposed by an MCP server
@@ -54,7 +55,30 @@ impl McpConnection {
             server_name: server_name.to_string(),
             service,
             tools,
+            config: config.clone(),
         })
+    }
+
+    /// Reconnect to the MCP server after a disconnect
+    pub async fn reconnect(&mut self) -> anyhow::Result<()> {
+        eprintln!(
+            "\x1b[33m[mcp] Reconnecting to '{}'...\x1b[0m",
+            self.server_name
+        );
+
+        let transport = TokioChildProcess::new(
+            tokio::process::Command::new(&self.config.command).configure(|cmd| {
+                cmd.args(&self.config.args);
+                for (k, v) in &self.config.env {
+                    cmd.env(k, v);
+                }
+            }),
+        )?;
+
+        self.service = ().serve(transport).await?;
+
+        eprintln!("\x1b[32m[mcp] Reconnected to '{}'\x1b[0m", self.server_name);
+        Ok(())
     }
 
     /// Call a tool on this MCP server
