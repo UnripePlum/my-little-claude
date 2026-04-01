@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use unripe_core::config::AgentConfig;
+use unripe_core::config::{AgentConfig, HookConfig};
 use unripe_core::message::{ContentBlock, Message, Role};
 use unripe_core::permission::{Permission, PermissionGate, ToolAction};
 use unripe_core::provider::{LlmProvider, TurnConfig, TurnResponse};
@@ -9,6 +9,7 @@ use unripe_core::session::Session;
 use unripe_core::tool::{Tool, ToolContext, ToolResult};
 
 use crate::bootstrap;
+use crate::checkpoint::{self, CheckpointStore};
 
 /// Reason the engine stopped
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +45,7 @@ pub struct AgentEngine {
     config: AgentConfig,
     project_root: PathBuf,
     chat_only: bool,
+    checkpoints: std::sync::Mutex<CheckpointStore>,
 }
 
 impl AgentEngine {
@@ -61,7 +63,18 @@ impl AgentEngine {
             config,
             project_root,
             chat_only: false,
+            checkpoints: std::sync::Mutex::new(CheckpointStore::new()),
         }
+    }
+
+    /// Undo the most recent file modification. Returns the checkpoint label.
+    pub fn undo(&self) -> Option<String> {
+        self.checkpoints.lock().ok()?.undo()
+    }
+
+    /// Number of available undo checkpoints.
+    pub fn checkpoint_count(&self) -> usize {
+        self.checkpoints.lock().map(|s| s.len()).unwrap_or(0)
     }
 
     /// Enable chat-only mode (no tool calling, just conversation)
@@ -227,6 +240,14 @@ impl AgentEngine {
         // so the user sees the preview when deciding to approve
         callbacks.on_tool_start(name, input).await;
 
+        // Run pre_tool_use hooks (can block execution)
+        if !self.run_hooks("pre_tool_use", name, input, callbacks).await {
+            let msg = "Blocked by pre_tool_use hook";
+            callbacks.on_tool_end(name, msg, true).await;
+            session.add_message(Message::tool_result(id, msg, true));
+            return Ok(None);
+        }
+
         // Determine the action for permission checking
         let action = infer_tool_action(name, input, &self.project_root);
 
@@ -251,6 +272,17 @@ impl AgentEngine {
             }
         }
 
+        // Checkpoint: save file state before write/edit
+        let modified_paths = checkpoint::tool_modified_paths(name, input, &self.project_root);
+        if !modified_paths.is_empty() {
+            if let Ok(mut store) = self.checkpoints.lock() {
+                store.save(
+                    &format!("{name} {}", modified_paths[0].display()),
+                    &modified_paths,
+                );
+            }
+        }
+
         // Execute (preview already shown above)
 
         let ctx = ToolContext {
@@ -264,6 +296,10 @@ impl AgentEngine {
         let output = result.output();
 
         callbacks.on_tool_end(name, &output, is_error).await;
+
+        // Run post_tool_use hooks (informational, cannot block)
+        self.run_hooks("post_tool_use", name, input, callbacks)
+            .await;
 
         match result {
             ToolResult::Success(s) => {
@@ -280,6 +316,58 @@ impl AgentEngine {
         }
 
         Ok(None)
+    }
+
+    /// Run hooks matching an event and tool name.
+    /// Returns Ok(true) to proceed, Ok(false) to block (pre_tool_use only).
+    async fn run_hooks(
+        &self,
+        event: &str,
+        tool_name: &str,
+        input: &serde_json::Value,
+        callbacks: &dyn EngineCallbacks,
+    ) -> bool {
+        let matching: Vec<&HookConfig> = self
+            .config
+            .hooks
+            .iter()
+            .filter(|h| h.event == event && (h.tool == "*" || h.tool == tool_name))
+            .collect();
+
+        for hook in matching {
+            let input_str = serde_json::to_string(input).unwrap_or_default();
+            let result = tokio::process::Command::new("sh")
+                .arg("-c")
+                .arg(&hook.command)
+                .env("TOOL_NAME", tool_name)
+                .env("TOOL_INPUT", &input_str)
+                .env("HOOK_EVENT", event)
+                .output()
+                .await;
+
+            match result {
+                Ok(output) if !output.status.success() => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let msg = if stderr.trim().is_empty() {
+                        format!("Hook blocked: {}", hook.command)
+                    } else {
+                        format!("Hook blocked: {}", stderr.trim())
+                    };
+                    callbacks
+                        .on_text(&format!("\n\x1b[33m[{msg}]\x1b[0m\n"))
+                        .await;
+                    return false;
+                }
+                Err(e) => {
+                    callbacks
+                        .on_text(&format!("\n\x1b[31m[Hook error: {e}]\x1b[0m\n"))
+                        .await;
+                    // Hook errors don't block execution
+                }
+                _ => {}
+            }
+        }
+        true
     }
 }
 
@@ -299,7 +387,7 @@ fn infer_tool_action(
             };
             ToolAction::FileRead(path)
         }
-        "write_file" => {
+        "write_file" | "edit_file" => {
             let path_str = input.get("path").and_then(|v| v.as_str()).unwrap_or("");
             let path = if PathBuf::from(path_str).is_absolute() {
                 PathBuf::from(path_str)
@@ -325,6 +413,14 @@ fn infer_tool_action(
                 project_root.join(path_str)
             };
             ToolAction::FileRead(path)
+        }
+        "web_fetch" => {
+            let url = input
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            ToolAction::NetworkRequest(url)
         }
         _ => ToolAction::NetworkRequest(format!("unknown tool: {name}")),
     }

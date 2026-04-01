@@ -5,8 +5,40 @@ use std::path::Path;
 pub fn load_project_context(project_root: &Path, extra_files: &[String]) -> String {
     let mut parts = Vec::new();
 
-    // Standard context files
-    let standard_files = ["CLAUDE.md", "AGENTS.md", ".unripe/context.md"];
+    // CLAUDE.md 4-level hierarchy (managed → user → project → local)
+    // Later levels can override earlier ones. All are loaded for context.
+    let claude_md_paths: Vec<(String, std::path::PathBuf)> = vec![
+        // 1. Managed: shipped with the tool
+        (
+            "CLAUDE.md (managed)".into(),
+            project_root.join(".unripe/managed/CLAUDE.md"),
+        ),
+        // 2. User: global user preferences
+        (
+            "CLAUDE.md (user)".into(),
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".unripe/CLAUDE.md"),
+        ),
+        // 3. Project: repository-level
+        ("CLAUDE.md (project)".into(), project_root.join("CLAUDE.md")),
+        // 4. Local: gitignored local overrides
+        (
+            "CLAUDE.md (local)".into(),
+            project_root.join(".unripe/CLAUDE.md"),
+        ),
+    ];
+
+    for (label, path) in &claude_md_paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if !content.trim().is_empty() {
+                parts.push(format!("# {label}\n\n{content}"));
+            }
+        }
+    }
+
+    // Other standard context files
+    let standard_files = ["AGENTS.md", ".unripe/context.md"];
     for filename in &standard_files {
         let path = project_root.join(filename);
         if let Ok(content) = std::fs::read_to_string(&path) {

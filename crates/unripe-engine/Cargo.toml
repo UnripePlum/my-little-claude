@@ -8,6 +8,7 @@ description = "Agent engine loop for my-little-claude"
 [dependencies]
 unripe-core = { path = "../unripe-core" }
 anyhow.workspace = true
+dirs.workspace = true
 async-trait.workspace = true
 futures.workspace = true
 serde.workspace = true

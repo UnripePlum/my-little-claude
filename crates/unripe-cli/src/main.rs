@@ -37,6 +37,15 @@ struct Cli {
     /// Chat-only mode (no tool calling, just conversation)
     #[arg(long)]
     chat: bool,
+
+    /// Non-interactive mode: output only final text, no colors, no tool previews.
+    /// Writes and bash auto-denied unless --yes is also set.
+    #[arg(long)]
+    print: bool,
+
+    /// Auto-approve all permission prompts (use with --print for CI)
+    #[arg(long)]
+    yes: bool,
 }
 
 #[derive(Subcommand)]
@@ -145,6 +154,33 @@ impl EngineCallbacks for TerminalCallbacks {
                 eprintln!("\x1b[35m  ╭─ bash\x1b[0m");
                 eprintln!("\x1b[35m  │ $ {cmd}\x1b[0m");
             }
+            "edit_file" => {
+                let path = input.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[33m  ╭─ edit \x1b[1m{path}\x1b[0m");
+                if let (Some(old), Some(new)) = (
+                    input.get("old_string").and_then(|v| v.as_str()),
+                    input.get("new_string").and_then(|v| v.as_str()),
+                ) {
+                    for line in old.lines().take(5) {
+                        eprintln!("\x1b[31m  │ -{line}\x1b[0m");
+                    }
+                    if old.lines().count() > 5 {
+                        eprintln!(
+                            "\x1b[90m  │ ... ({} more lines)\x1b[0m",
+                            old.lines().count() - 5
+                        );
+                    }
+                    for line in new.lines().take(5) {
+                        eprintln!("\x1b[32m  │ +{line}\x1b[0m");
+                    }
+                    if new.lines().count() > 5 {
+                        eprintln!(
+                            "\x1b[90m  │ ... ({} more lines)\x1b[0m",
+                            new.lines().count() - 5
+                        );
+                    }
+                }
+            }
             "glob" => {
                 let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
                 eprintln!("\x1b[36m  ╭─ glob \x1b[1m{pattern}\x1b[0m");
@@ -152,6 +188,10 @@ impl EngineCallbacks for TerminalCallbacks {
             "grep" => {
                 let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
                 eprintln!("\x1b[36m  ╭─ grep \x1b[1m{pattern}\x1b[0m");
+            }
+            "web_fetch" => {
+                let url = input.get("url").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[34m  ╭─ fetch \x1b[1m{url}\x1b[0m");
             }
             _ => {
                 eprintln!("\x1b[36m  ╭─ {tool_name}\x1b[0m");
@@ -190,7 +230,7 @@ impl EngineCallbacks for TerminalCallbacks {
                     }
                     eprintln!("\x1b[35m  ╰─ done\x1b[0m");
                 }
-                "write_file" => {
+                "write_file" | "edit_file" => {
                     eprintln!("\x1b[33m  ╰─ \x1b[32m{result}\x1b[0m");
                 }
                 _ => {
@@ -203,6 +243,23 @@ impl EngineCallbacks for TerminalCallbacks {
             }
         }
     }
+}
+
+struct PrintCallbacks {
+    auto_yes: bool,
+}
+
+#[async_trait::async_trait]
+impl EngineCallbacks for PrintCallbacks {
+    async fn ask_permission(&self, _prompt: &str) -> bool {
+        self.auto_yes
+    }
+    async fn on_text(&self, text: &str) {
+        print!("{text}");
+        std::io::stdout().flush().ok();
+    }
+    async fn on_tool_start(&self, _tool_name: &str, _input: &serde_json::Value) {}
+    async fn on_tool_end(&self, _tool_name: &str, _result: &str, _is_error: bool) {}
 }
 
 fn print_banner(provider: &str, model: &str, mode: &str) {
@@ -565,18 +622,6 @@ async fn main() -> anyhow::Result<()> {
         .as_deref()
         .unwrap_or(&config.provider.default_model);
 
-    let prompt = match &cli.prompt {
-        Some(p) => p.clone(),
-        None => {
-            eprintln!("Usage: unripe \"your prompt here\"");
-            eprintln!(
-                "       unripe setup              -- detect hardware and download a local model"
-            );
-            eprintln!("       unripe --provider ollama --model qwen2.5-coder:7b \"your prompt\"");
-            std::process::exit(1);
-        }
-    };
-
     let provider = build_provider(provider_name, model, &config)?;
 
     // Auto-detect chat-only mode from model catalog
@@ -602,7 +647,14 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let mode_label = if chat_only { " | chat-only" } else { "" };
+    let is_repl = cli.prompt.is_none();
+    let mode_label = if chat_only {
+        " | chat-only"
+    } else if is_repl {
+        " | interactive"
+    } else {
+        ""
+    };
     print_banner(provider_name, model, mode_label);
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -646,20 +698,293 @@ async fn main() -> anyhow::Result<()> {
         Session::new(provider_name, model)
     };
 
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        eprintln!("\n\x1b[33m[Interrupted]\x1b[0m");
-        std::process::exit(130);
-    });
+    match cli.prompt {
+        Some(prompt) => {
+            // One-shot mode
+            tokio::spawn(async move {
+                tokio::signal::ctrl_c().await.ok();
+                eprintln!("\n\x1b[33m[Interrupted]\x1b[0m");
+                std::process::exit(130);
+            });
+
+            if cli.print {
+                // Non-interactive: only output final text
+                let callbacks = PrintCallbacks { auto_yes: cli.yes };
+                let _reason = engine.run(&prompt, &mut session, &callbacks).await?;
+                println!(); // trailing newline
+            } else {
+                let callbacks = TerminalCallbacks;
+                let reason = engine.run(&prompt, &mut session, &callbacks).await?;
+
+                let _path = session_store.save(&session)?;
+                eprintln!(
+                    "\n\x1b[90mSession saved: {} ({:?})\x1b[0m",
+                    &session.id[..8],
+                    reason
+                );
+            }
+        }
+        None => {
+            // Interactive REPL mode
+            run_repl(engine, session, session_store).await?;
+        }
+    }
+
+    Ok(())
+}
+
+// ── REPL ────────────────────────────────────────────────────────────
+
+enum ReplCommand {
+    Prompt(String),
+    Exit,
+    Clear,
+    Save,
+    History,
+    Help,
+    Undo,
+    Skill { name: String, args: String },
+    ListSkills,
+}
+
+fn parse_repl_command(input: &str) -> ReplCommand {
+    let trimmed = input.trim();
+    match trimmed {
+        "/exit" | "/quit" | "/q" => ReplCommand::Exit,
+        "/clear" => ReplCommand::Clear,
+        "/save" => ReplCommand::Save,
+        "/history" => ReplCommand::History,
+        "/help" | "/?" => ReplCommand::Help,
+        "/undo" => ReplCommand::Undo,
+        "/skills" => ReplCommand::ListSkills,
+        s if s.starts_with('/') => {
+            // Skill invocation: /skill-name optional args
+            let rest = &s[1..];
+            let (name, args) = match rest.split_once(' ') {
+                Some((n, a)) => (n.to_string(), a.to_string()),
+                None => (rest.to_string(), String::new()),
+            };
+            ReplCommand::Skill { name, args }
+        }
+        _ => ReplCommand::Prompt(trimmed.to_string()),
+    }
+}
+
+/// Load a skill prompt from .unripe/skills/{name}.md or ~/.unripe/skills/{name}.md
+fn load_skill(name: &str, project_root: &std::path::Path) -> Option<String> {
+    // Project-local skills first
+    let local = project_root.join(format!(".unripe/skills/{name}.md"));
+    if let Ok(content) = std::fs::read_to_string(&local) {
+        return Some(content);
+    }
+
+    // User-global skills
+    if let Some(home) = dirs::home_dir() {
+        let global = home.join(format!(".unripe/skills/{name}.md"));
+        if let Ok(content) = std::fs::read_to_string(&global) {
+            return Some(content);
+        }
+    }
+
+    None
+}
+
+/// List available skills from both local and global directories
+fn list_skills(project_root: &std::path::Path) -> Vec<(String, String)> {
+    let mut skills = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    let dirs_to_check: Vec<(std::path::PathBuf, &str)> = {
+        let mut v = vec![(project_root.join(".unripe/skills"), "local")];
+        if let Some(home) = dirs::home_dir() {
+            v.push((home.join(".unripe/skills"), "global"));
+        }
+        v
+    };
+
+    for (dir, source) in &dirs_to_check {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "md") {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        if seen.insert(stem.to_string()) {
+                            skills.push((stem.to_string(), source.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    skills.sort();
+    skills
+}
+
+async fn run_repl(
+    engine: AgentEngine,
+    mut session: Session,
+    session_store: SessionStore,
+) -> anyhow::Result<()> {
+    use rustyline::error::ReadlineError;
+    use rustyline::DefaultEditor;
+
+    eprintln!("\x1b[90mInteractive mode. Type /help for commands, Ctrl+D to exit.\x1b[0m\n");
 
     let callbacks = TerminalCallbacks;
-    let reason = engine.run(&prompt, &mut session, &callbacks).await?;
+    let mut turn_number: u32 = 0;
 
-    let _path = session_store.save(&session)?;
+    let history_path = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".unripe")
+        .join("repl_history");
+
+    // rustyline readline is blocking, so we run the input loop on a blocking thread
+    // and communicate back via channels
+    loop {
+        // Read input on a blocking thread (rustyline is !Send-safe with spawn_blocking
+        // for the Editor, so we create a fresh editor each time — cheap operation)
+        let hist = history_path.clone();
+        let input = tokio::task::spawn_blocking(move || {
+            let mut rl = DefaultEditor::new().ok()?;
+            let _ = rl.load_history(&hist);
+            let result = rl.readline("\x1b[38;5;209munripe>\x1b[0m ");
+            if let Ok(ref line) = result {
+                let _ = rl.add_history_entry(line);
+                let _ = rl.save_history(&hist);
+            }
+            Some(result)
+        })
+        .await?;
+
+        let input = match input {
+            Some(Ok(line)) => line,
+            Some(Err(ReadlineError::Interrupted)) => {
+                eprintln!("\x1b[90m(interrupted)\x1b[0m");
+                continue;
+            }
+            Some(Err(ReadlineError::Eof)) => break,
+            Some(Err(e)) => {
+                eprintln!("\x1b[31mInput error: {e}\x1b[0m");
+                break;
+            }
+            None => break,
+        };
+
+        let input = input.trim().to_string();
+        if input.is_empty() {
+            continue;
+        }
+
+        match parse_repl_command(&input) {
+            ReplCommand::Exit => break,
+            ReplCommand::Clear => {
+                let provider = session.provider.clone();
+                let model = session.model.clone();
+                session = Session::new(&provider, &model);
+                eprintln!("\x1b[90mSession cleared.\x1b[0m");
+            }
+            ReplCommand::Save => {
+                session_store.save(&session)?;
+                eprintln!("\x1b[90mSession saved: {}\x1b[0m", &session.id[..8]);
+            }
+            ReplCommand::History => {
+                for msg in &session.messages {
+                    let role = format!("{:?}", msg.role);
+                    let text = msg.text_content();
+                    let preview: String = text.chars().take(120).collect();
+                    if !preview.is_empty() {
+                        eprintln!("\x1b[90m[{role}] {preview}\x1b[0m");
+                    }
+                }
+            }
+            ReplCommand::Undo => match engine.undo() {
+                Some(label) => {
+                    eprintln!("\x1b[32mUndo: {label}\x1b[0m");
+                    let remaining = engine.checkpoint_count();
+                    if remaining > 0 {
+                        eprintln!("\x1b[90m({remaining} more undo(s) available)\x1b[0m");
+                    }
+                }
+                None => {
+                    eprintln!("\x1b[90mNothing to undo.\x1b[0m");
+                }
+            },
+            ReplCommand::ListSkills => {
+                let project_root = std::env::current_dir().unwrap_or_default();
+                let skills = list_skills(&project_root);
+                if skills.is_empty() {
+                    eprintln!("\x1b[90mNo skills found. Add .md files to .unripe/skills/ or ~/.unripe/skills/\x1b[0m");
+                } else {
+                    eprintln!("\x1b[1mAvailable skills:\x1b[0m");
+                    for (name, source) in &skills {
+                        eprintln!("  /{name} \x1b[90m({source})\x1b[0m");
+                    }
+                }
+            }
+            ReplCommand::Skill { name, args } => {
+                let project_root = std::env::current_dir().unwrap_or_default();
+                match load_skill(&name, &project_root) {
+                    Some(template) => {
+                        // Replace {{ARGUMENTS}} placeholder with args
+                        let prompt = if args.is_empty() {
+                            template
+                        } else {
+                            template.replace("{{ARGUMENTS}}", &args)
+                        };
+                        session.reset_turn_budget();
+                        turn_number += 1;
+                        match engine.run(&prompt, &mut session, &callbacks).await {
+                            Ok(reason) => eprintln!("\n\x1b[90m({reason:?})\x1b[0m\n"),
+                            Err(e) => eprintln!("\n\x1b[31mError: {e}\x1b[0m\n"),
+                        }
+                        if turn_number.is_multiple_of(3) {
+                            let _ = session_store.save(&session);
+                        }
+                    }
+                    None => {
+                        eprintln!("\x1b[33mSkill '/{name}' not found. Use /skills to list available skills.\x1b[0m");
+                    }
+                }
+            }
+            ReplCommand::Help => {
+                eprintln!("  /exit, /quit, /q  Exit the REPL");
+                eprintln!("  /clear            Clear conversation history");
+                eprintln!("  /save             Save session to disk");
+                eprintln!("  /undo             Undo the last file edit");
+                eprintln!("  /skills           List available skills");
+                eprintln!("  /<name> [args]    Run a skill");
+                eprintln!("  /history          Show conversation messages");
+                eprintln!("  /help, /?         Show this help");
+                eprintln!("  Ctrl+D            Exit");
+                eprintln!("  Ctrl+C            Cancel current input");
+            }
+            ReplCommand::Prompt(prompt) => {
+                session.reset_turn_budget();
+                turn_number += 1;
+
+                match engine.run(&prompt, &mut session, &callbacks).await {
+                    Ok(reason) => {
+                        eprintln!("\n\x1b[90m({reason:?})\x1b[0m\n");
+                    }
+                    Err(e) => {
+                        eprintln!("\n\x1b[31mError: {e}\x1b[0m\n");
+                    }
+                }
+
+                // Auto-save every 3 turns
+                if turn_number.is_multiple_of(3) {
+                    let _ = session_store.save(&session);
+                }
+            }
+        }
+    }
+
+    // Final save
+    let _ = session_store.save(&session);
     eprintln!(
-        "\n\x1b[90mSession saved: {} ({:?})\x1b[0m",
-        &session.id[..8],
-        reason
+        "\x1b[90mSession saved: {}. Goodbye.\x1b[0m",
+        &session.id[..8]
     );
 
     Ok(())

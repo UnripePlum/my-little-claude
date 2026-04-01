@@ -24,6 +24,27 @@ pub struct AgentConfig {
     /// Additional context files to load during bootstrap
     #[serde(default)]
     pub context_files: Vec<String>,
+
+    /// Hooks: shell commands triggered on tool events
+    #[serde(default)]
+    pub hooks: Vec<HookConfig>,
+}
+
+/// A hook that runs a shell command on a tool event
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HookConfig {
+    /// Event type: "pre_tool_use" or "post_tool_use"
+    pub event: String,
+    /// Tool name to match (or "*" for all tools)
+    #[serde(default = "default_hook_tool")]
+    pub tool: String,
+    /// Shell command to execute. Gets TOOL_NAME, TOOL_INPUT env vars.
+    /// For pre_tool_use: exit 0 = proceed, non-zero = block.
+    pub command: String,
+}
+
+fn default_hook_tool() -> String {
+    "*".into()
 }
 
 fn default_max_turns() -> u32 {
@@ -47,6 +68,7 @@ impl Default for AgentConfig {
             bash_timeout_secs: default_bash_timeout(),
             truncation_keep_recent: default_truncation_keep(),
             context_files: Vec::new(),
+            hooks: Vec::new(),
         }
     }
 }

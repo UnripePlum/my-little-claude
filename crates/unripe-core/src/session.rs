@@ -41,6 +41,14 @@ impl Session {
         self.turn_count += 1;
     }
 
+    /// Reset turn count and token estimate for a new user interaction.
+    /// Messages are preserved (conversation context kept), but the
+    /// budget counters restart so the engine doesn't refuse to run.
+    pub fn reset_turn_budget(&mut self) {
+        self.turn_count = 0;
+        self.token_estimate = 0;
+    }
+
     /// Truncate old messages to fit within limits.
     /// Keeps: system messages + last `keep_recent` messages.
     /// Old tool results are replaced with "[truncated]".
@@ -222,6 +230,23 @@ mod tests {
         session.add_message(Message::text(Role::Assistant, "hi"));
         session.truncate(10);
         assert_eq!(session.messages.len(), 2);
+    }
+
+    #[test]
+    fn test_session_reset_turn_budget() {
+        let mut session = Session::new("test", "test");
+        session.add_message(Message::text(Role::User, "hello world"));
+        session.increment_turn();
+        session.increment_turn();
+        assert_eq!(session.turn_count, 2);
+        assert!(session.token_estimate > 0);
+        assert_eq!(session.messages.len(), 1);
+
+        session.reset_turn_budget();
+        assert_eq!(session.turn_count, 0);
+        assert_eq!(session.token_estimate, 0);
+        // Messages preserved
+        assert_eq!(session.messages.len(), 1);
     }
 
     #[test]
