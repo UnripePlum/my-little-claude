@@ -49,7 +49,7 @@ impl OllamaProvider {
                                 r#type: "function".into(),
                                 function: OllamaFunctionCall {
                                     name: name.clone(),
-                                    arguments: serde_json::to_string(input).unwrap_or_default(),
+                                    arguments: input.clone(),
                                 },
                             });
                         }
@@ -101,11 +101,16 @@ impl OllamaProvider {
             .tool_calls
             .unwrap_or_default()
             .into_iter()
-            .map(|tc| ToolCall {
-                id: tc.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
-                name: tc.function.name,
-                input: serde_json::from_str(&tc.function.arguments)
-                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+            .filter_map(|tc| {
+                let func = tc.function?;
+                if func.name.is_empty() {
+                    return None;
+                }
+                Some(ToolCall {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    name: func.name,
+                    input: func.arguments,
+                })
             })
             .collect();
 
@@ -307,7 +312,7 @@ struct OllamaToolCall {
 #[derive(Debug, Serialize, Deserialize)]
 struct OllamaFunctionCall {
     name: String,
-    arguments: String,
+    arguments: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -327,7 +332,10 @@ struct OllamaFunction {
 struct OllamaResponse {
     message: OllamaResponseMessage,
     #[allow(dead_code)]
+    #[serde(default)]
     done: bool,
+    // ollama returns many extra fields (done_reason, total_duration, etc.)
+    // serde ignores them by default
 }
 
 #[derive(Debug, Deserialize)]
@@ -335,7 +343,22 @@ struct OllamaResponseMessage {
     #[serde(default)]
     content: String,
     #[serde(default)]
-    tool_calls: Option<Vec<OllamaToolCall>>,
+    tool_calls: Option<Vec<OllamaResponseToolCall>>,
+}
+
+/// Tool call format in ollama responses (different from request format)
+#[derive(Debug, Deserialize)]
+struct OllamaResponseToolCall {
+    #[serde(default)]
+    function: Option<OllamaResponseFunctionCall>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaResponseFunctionCall {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    arguments: serde_json::Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -396,7 +419,7 @@ mod tests {
                 content: "Hello!".into(),
                 tool_calls: None,
             },
-            done: true,
+            done: true, // extra fields like done_reason are ignored by serde
         };
         match OllamaProvider::parse_response(resp) {
             TurnResponse::Text(t) => assert_eq!(t, "Hello!"),
@@ -409,13 +432,11 @@ mod tests {
         let resp = OllamaResponse {
             message: OllamaResponseMessage {
                 content: String::new(),
-                tool_calls: Some(vec![OllamaToolCall {
-                    id: Some("call_1".into()),
-                    r#type: "function".into(),
-                    function: OllamaFunctionCall {
+                tool_calls: Some(vec![OllamaResponseToolCall {
+                    function: Some(OllamaResponseFunctionCall {
                         name: "bash".into(),
-                        arguments: r#"{"command":"ls"}"#.into(),
-                    },
+                        arguments: serde_json::json!({"command": "ls"}),
+                    }),
                 }]),
             },
             done: true,
@@ -431,17 +452,15 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_response_tool_call_no_id() {
+    fn test_parse_response_tool_call_auto_id() {
         let resp = OllamaResponse {
             message: OllamaResponseMessage {
                 content: String::new(),
-                tool_calls: Some(vec![OllamaToolCall {
-                    id: None,
-                    r#type: "function".into(),
-                    function: OllamaFunctionCall {
+                tool_calls: Some(vec![OllamaResponseToolCall {
+                    function: Some(OllamaResponseFunctionCall {
                         name: "read_file".into(),
-                        arguments: r#"{"path":"main.rs"}"#.into(),
-                    },
+                        arguments: serde_json::json!({"path": "main.rs"}),
+                    }),
                 }]),
             },
             done: true,
