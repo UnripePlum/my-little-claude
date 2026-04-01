@@ -28,7 +28,7 @@ impl OllamaProvider {
     fn to_api_messages(messages: &[Message]) -> Vec<OllamaMessage> {
         messages
             .iter()
-            .filter_map(|msg| {
+            .map(|msg| {
                 let role = match msg.role {
                     Role::System => "system",
                     Role::User => "user",
@@ -36,7 +36,6 @@ impl OllamaProvider {
                     Role::Tool => "tool",
                 };
 
-                // Extract content based on block types
                 let mut text_parts = Vec::new();
                 let mut tool_calls = Vec::new();
                 let mut tool_call_id = None;
@@ -67,7 +66,7 @@ impl OllamaProvider {
 
                 let content = text_parts.join("");
 
-                Some(OllamaMessage {
+                OllamaMessage {
                     role: role.into(),
                     content,
                     tool_calls: if tool_calls.is_empty() {
@@ -76,7 +75,7 @@ impl OllamaProvider {
                         Some(tool_calls)
                     },
                     tool_call_id,
-                })
+                }
             })
             .collect()
     }
