@@ -127,7 +127,21 @@ fn build_provider(
             model.to_string(),
             config.provider.ollama.base_url.clone(),
         ))),
-        other => anyhow::bail!("Unknown provider: {other}. Supported: anthropic, ollama"),
+        "openai" => {
+            let api_key = std::env::var(&config.provider.openai.api_key_env).map_err(|_| {
+                anyhow::anyhow!(
+                    "OpenAI API key not found. Set {} environment variable.",
+                    config.provider.openai.api_key_env
+                )
+            })?;
+            let mut provider =
+                unripe_providers::openai::OpenAiProvider::new(api_key, model.to_string());
+            if let Some(url) = &config.provider.openai.base_url {
+                provider = provider.with_base_url(url.clone());
+            }
+            Ok(Box::new(provider))
+        }
+        other => anyhow::bail!("Unknown provider: {other}. Supported: anthropic, openai, ollama"),
     }
 }
 

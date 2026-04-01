@@ -301,6 +301,16 @@ fn infer_tool_action(
                 .to_string();
             ToolAction::BashExec(cmd)
         }
+        "glob" | "grep" => {
+            // Read-only search tools, resolve path relative to project
+            let path_str = input.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+            let path = if PathBuf::from(path_str).is_absolute() {
+                PathBuf::from(path_str)
+            } else {
+                project_root.join(path_str)
+            };
+            ToolAction::FileRead(path)
+        }
         _ => ToolAction::NetworkRequest(format!("unknown tool: {name}")),
     }
 }

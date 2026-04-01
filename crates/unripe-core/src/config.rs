@@ -92,6 +92,9 @@ pub struct ProviderConfig {
 
     #[serde(default)]
     pub ollama: OllamaConfig,
+
+    #[serde(default)]
+    pub openai: OpenAiConfig,
 }
 
 fn default_provider() -> String {
@@ -108,6 +111,7 @@ impl Default for ProviderConfig {
             default_model: default_model(),
             anthropic: AnthropicConfig::default(),
             ollama: OllamaConfig::default(),
+            openai: OpenAiConfig::default(),
         }
     }
 }
@@ -150,6 +154,26 @@ impl Default for OllamaConfig {
     fn default() -> Self {
         Self {
             base_url: default_ollama_url(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OpenAiConfig {
+    #[serde(default = "default_openai_key_env")]
+    pub api_key_env: String,
+    pub base_url: Option<String>,
+}
+
+fn default_openai_key_env() -> String {
+    "OPENAI_API_KEY".into()
+}
+
+impl Default for OpenAiConfig {
+    fn default() -> Self {
+        Self {
+            api_key_env: default_openai_key_env(),
+            base_url: None,
         }
     }
 }
