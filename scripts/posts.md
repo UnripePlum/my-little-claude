@@ -1,116 +1,149 @@
-# Community Posts for my-little-claude
+# Community Posts — my-little-claude
+
+---
 
 ## Hacker News (Show HN)
 
-**Title:** Show HN: my-little-claude, an open-source coding agent in Rust that works with any LLM
+**Title:** Show HN: I built an open-source Claude Code clone in Rust that runs on any LLM
 
 **Body:**
 
-I built a model-agnostic coding agent harness in Rust. It works with Anthropic Claude, OpenAI, and local models via ollama. No vendor lock-in.
+I got tired of paying for Claude Code and being locked into one provider. So I built my own.
 
-What it does:
-- 3 LLM providers (Anthropic, OpenAI, ollama) behind a single `LlmProvider` trait
-- 5 built-in tools (read_file, write_file, bash, glob, grep) with a tiered permission system
-- MCP client support (reads .mcp.json, same format as Claude Code)
-- `unripe setup` auto-detects your hardware and recommends the best local model from a catalog of 27 models
-- Session persistence and replay (run the same prompts through different models)
-- Chat-only fallback for models without tool calling support
+my-little-claude is a coding agent in Rust that works with Anthropic, OpenAI, or any local model via ollama. No API key needed. It auto-detects your hardware and picks the best model for your machine.
 
-The architecture is a workspace of 7 Rust crates. Each component (core traits, providers, tools, engine, CLI) is a separate crate you can depend on independently.
+What made me build this: I wanted to use local models for coding tasks but every agent was either Python (slow to start, heavy dependencies) or locked to one provider. Rust gives me a 5MB binary that starts instantly.
 
-156 tests, clippy clean, pre-commit hooks.
+It reads your code, finds bugs, fixes them, and asks permission before writing. Like Claude Code, but you own it.
+
+Demo GIF: https://github.com/UnripePlum/my-little-claude
+
+What I shipped:
+- 3 LLM providers behind one trait (swap with a flag)
+- MCP support (same .mcp.json as Claude Code)
+- 27 local models categorized by coding/general/reasoning
+- Permission system that actually asks before writing
+- 156 tests, 7 Rust crates
+
+Built the whole thing in one day with Claude Code. The irony is not lost on me.
 
 GitHub: https://github.com/UnripePlum/my-little-claude
-
-Built in a day with Claude Code. Happy to answer questions about the architecture or Rust patterns used.
 
 ---
 
 ## Reddit r/rust
 
-**Title:** [Media] I built a model-agnostic coding agent in Rust: my-little-claude
+**Title:** I replaced Claude Code with 5MB of Rust. Here's the architecture.
 
 **Body:**
 
-Hey r/rust! I built an open-source coding agent that works with any LLM provider (Anthropic, OpenAI, local models via ollama).
+Claude Code is great but it's $20/month and you can't use your own models. I built an open-source alternative in Rust.
 
-**Why Rust?** Single binary distribution, async with tokio, trait-based provider/tool abstraction, and zero unsafe.
+**The result: 5MB binary, 156 tests, works with any LLM.**
 
-**Architecture:**
-- 7 crates in a cargo workspace
-- `LlmProvider` trait with 3 implementations (Anthropic SSE streaming, OpenAI chat completions, ollama)
-- `Tool` trait with 5 built-in tools + MCP bridge for external tools
-- `PermissionGate` trait with tiered security defaults
-- Shared SSE parser using custom `Stream` implementation
-- 156 tests, all passing
+Here's what was interesting from an engineering perspective:
 
-**Cool Rust patterns used:**
-- `async_trait` for provider/tool abstraction (needed for `dyn Trait`)
-- `stream::unfold` and custom `Stream` impl for SSE parsing
-- `include_str!` for embedding the model catalog JSON at compile time
-- `serde` tagged enums for Anthropic content blocks
-- `tokio::process` with `kill_on_drop` for bash tool timeout
+**The trait design:**
+```rust
+#[async_trait]
+pub trait LlmProvider: Send + Sync {
+    async fn send_turn(&self, messages: &[Message], tools: &[ToolDefinition], config: &TurnConfig) -> Result<TurnResponse>;
+    async fn stream_turn(...) -> Result<Pin<Box<dyn Stream<Item = StreamEvent> + Send>>>;
+}
+```
+One trait, three implementations (Anthropic SSE, OpenAI chat completions, ollama). Swap provider with `--provider ollama`. The abstraction held up perfectly across all three.
 
-**Features:**
-- `unripe setup --list` shows 27 local models with hardware compatibility
-- MCP client reads `.mcp.json` (Claude Code compatible)
-- Session replay: `unripe replay <id> --provider ollama --model qwen3.5:9b`
-- Auto-detect chat-only mode for models without tool calling
+**The hard part:** Anthropic and OpenAI have completely different wire formats for tool calls. Anthropic uses nested content blocks with `tool_use_id` echo-back. OpenAI uses `tool_calls` array with stringified JSON arguments. ollama expects `arguments` as a JSON object, not a string. Each provider converts internally.
 
-GitHub: https://github.com/UnripePlum/my-little-claude
+**What I'm proud of:**
+- Custom `Stream` impl for SSE parsing (not just `unfold`)
+- `include_str!` for embedding model catalog at compile time
+- `kill_on_drop(true)` on bash child process + 30s timeout
+- Permission gate is sync (policy decision), Ask handling is async (user input) — clean separation
 
-Feedback welcome, especially on the trait design and async patterns!
+**What I learned:** The `async_trait` crate is still needed in 2026 if you want `dyn Trait`. Native async traits work for static dispatch but not `Box<dyn LlmProvider>`.
+
+7 crates, zero unsafe, tokio runtime. Demo: https://github.com/UnripePlum/my-little-claude
+
+Would love feedback on the trait design. Is there a better way to handle the provider abstraction?
 
 ---
 
 ## Reddit r/LocalLLaMA
 
-**Title:** Built an open-source coding agent that auto-detects your hardware and recommends the best local model
+**Title:** I built a coding agent that works offline with ollama. No API key, no cloud, no telemetry. Just your code and your model.
 
 **Body:**
 
-I built my-little-claude, a coding agent in Rust that's designed for local-first use with ollama.
+Every coding agent I tried either required an API key or phoned home. I wanted something that runs 100% on my machine.
 
-**The setup experience:**
+So I built my-little-claude. It's a Rust binary that:
+
+1. **Detects your hardware** (RAM, GPU, CPU arch)
+2. **Recommends a model** from 27 options categorized by use case
+3. **Downloads it** via ollama
+4. **Runs a coding agent** that reads files, finds bugs, and fixes them
+
+The whole thing works offline after the initial model download.
+
+**The killer feature for local model users:** If your model doesn't support tool calling (like llama3.2:3b), it auto-detects that and switches to chat-only mode. No crash, no cryptic error. Just works.
 
 ```
 $ unripe setup --list
 
-  System: RAM: 16.0GB | CPU: 10x aarch64 | GPU: Apple M2 Pro | Tier: Medium
-
-  Available models (27 total):
+  System: RAM: 64.0GB | CPU: 18x aarch64 | GPU: Apple M5 Pro | Tier: High
 
   [coding]
     [T] devstral-small-2:24b    Mistral coding agent
     [T] qwen3-coder:30b-a3b     Alibaba coding MoE
-
   [general]
     [T] qwen3.5:9b              Good balance
-    [T] qwen3.5:4b              Fast and lightweight
-
   [reasoning]
     [T] nemotron-cascade-2:30b  NVIDIA MoE
 ```
 
-It detects your RAM/GPU, classifies your system, and recommends the best model. Then downloads it via `ollama pull`.
+**What models are you using for coding?** I'd love to add more to the catalog. Currently 27 models but I know I'm missing some good ones.
 
-**Key features for local model users:**
-- Auto-detects hardware and recommends models by category (coding/general/reasoning)
-- Models without tool calling support auto-switch to chat-only mode
-- Works completely offline, no API key needed
-- Session replay lets you compare results across models
-- MCP plugin support
+Also supports session replay — run the same prompts through different models and compare outputs. Good for benchmarking local models against each other.
 
 GitHub: https://github.com/UnripePlum/my-little-claude
 
-What local models are you running for coding tasks? Would love to update the model catalog based on community feedback.
+---
+
+## X/Twitter
+
+**Post 1 (main):**
+
+I built an open-source Claude Code clone in Rust.
+
+5MB binary. Works with any LLM. No API key needed.
+
+- Anthropic, OpenAI, or ollama
+- 27 local models, auto hardware detection
+- MCP plugin support
+- Permission system that asks before writing
+- 156 tests
+
+Built in one day.
+
+github.com/UnripePlum/my-little-claude
+
+[attach demo.gif]
+
+**Post 2 (reply thread):**
+
+The irony: I built a Claude Code replacement using Claude Code.
+
+The whole thing — 7 Rust crates, 156 tests, 3 LLM providers, MCP client — was designed, implemented, reviewed, and tested in a single conversation.
+
+AI building AI tools. We're in the recursion now.
 
 ---
 
-## awesome-rust-llm PR description
+## awesome-rust-llm PR
 
-**Title:** Add my-little-claude - model-agnostic coding agent harness
+**Title:** Add my-little-claude — model-agnostic coding agent harness
 
 **Entry:**
 
-- [my-little-claude](https://github.com/UnripePlum/my-little-claude) - A model-agnostic coding agent harness. 3 LLM providers (Anthropic, OpenAI, ollama), 5 built-in tools, MCP client support, tiered permission system, session replay. 7-crate workspace, 156 tests.
+- [my-little-claude](https://github.com/UnripePlum/my-little-claude) — Open-source Claude Code alternative in Rust. 3 LLM providers (Anthropic, OpenAI, ollama), 5 tools, MCP client, tiered permissions, 27-model catalog with hardware auto-detection, session replay. 7 crates, 156 tests. Works offline with local models.

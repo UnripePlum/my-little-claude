@@ -21,7 +21,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/UnripePlum/my-little-claude/ci.yml?label=CI)](https://github.com/UnripePlum/my-little-claude/actions)
-[![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-156%20passing-brightgreen)]()
 
 </p>
 
@@ -31,7 +31,7 @@
 
 my-little-claude is both a **working coding agent** and a **crate ecosystem** for building your own.
 
-Three providers (Anthropic, OpenAI, ollama), five tools, a tiered permission system, and session persistence. Swap models with a flag. Add custom providers, tools, or permission policies by implementing a trait.
+Three providers (Anthropic, OpenAI, ollama), five tools, MCP plugin support, a tiered permission system, and session persistence. Swap models with a flag. Add custom providers, tools, or permission policies by implementing a trait.
 
 ## Features
 
@@ -42,6 +42,7 @@ Three providers (Anthropic, OpenAI, ollama), five tools, a tiered permission sys
 - **Session persistence** -- conversations save to disk, resume with `--resume`
 - **Auto-setup** -- `unripe setup` detects your hardware and downloads the right local model
 - **Safety guards** -- max_turns (25), token_budget (100K), bash timeout (30s), Ctrl+C graceful shutdown
+- **MCP plugin support** -- compatible with Claude Code's `.mcp.json`, extend with any MCP server
 - **Local-first** -- run with ollama, no API key, no internet required
 
 ## Quick Start
@@ -106,17 +107,18 @@ unripe replay <id> --model qwen3.5:9b           # replay with different model
              └──────────────┘   │   │    → permission?  │
                                 │   │    → execute      │
                                 │   │  → stream text    │
-                                │   └──┬──────────┬─────┘
-                                │      │          │
-                          ┌─────▼──┐  ┌▼──────────────┐
-                          │ tools  │  │   providers    │
-                          │        │  │                │
-                          │ read   │  │  anthropic     │
-                          │ write  │  │  openai        │
-                          │ bash   │  │  ollama        │
-                          │ glob   │  │  (your own)    │
-                          │ grep   │  │                │
-                          └───┬────┘  └───┬────────────┘
+                                │   └──┬──────┬───┬─────┘
+                                │      │      │   │
+                          ┌─────▼──┐  ┌▼──────┴───▼────┐
+                          │ tools  │  │   providers     │
+                          │        │  │                 │
+                          │ read   │  │  anthropic      │
+                          │ write  │  │  openai         │
+                          │ bash   │  │  ollama         │
+                          │ glob   │  │  (your own)     │
+                          │ grep   │  │                 │
+                          │ + MCP  │  └───┬─────────────┘
+                          └───┬────┘      │
                               │           │
                           ┌───▼───────────▼───┐
                           │    unripe-core     │
@@ -138,6 +140,7 @@ unripe replay <id> --model qwen3.5:9b           # replay with different model
 | **unripe-providers** | Anthropic (streaming SSE), OpenAI (chat completions), ollama (local) |
 | **unripe-tools** | `read_file`, `write_file`, `bash` (timeout), `glob`, `grep` |
 | **unripe-setup** | Hardware detection, model recommendation, ollama download |
+| **unripe-mcp** | MCP client: load `.mcp.json`, connect to servers, bridge tools into agent |
 | **unripe-cli** | Binary entry point with clap, permission prompts, colored output |
 
 ## How It Works
@@ -210,7 +213,7 @@ context_files = []       # Extra files to load as context
 
 [provider]
 default_provider = "ollama"
-default_model = "qwen2.5-coder:7b"
+default_model = "qwen3.5:9b"
 
 [provider.anthropic]
 api_key_env = "ANTHROPIC_API_KEY"
@@ -298,12 +301,13 @@ impl Tool for MyTool {
 git config core.hooksPath .githooks   # pre-commit: fmt + clippy + test
 
 # Test
-cargo test --workspace                 # 143 tests across 6 crates
+cargo test --workspace                 # 156 tests across 7 crates
 cargo test -p unripe-core              # Core traits (41 tests)
-cargo test -p unripe-engine            # Engine loop (12 tests)
+cargo test -p unripe-engine            # Engine loop (13 tests)
 cargo test -p unripe-providers         # 3 providers + SSE (39 tests)
 cargo test -p unripe-tools             # 5 tools (28 tests)
-cargo test -p unripe-setup             # Hardware detection (23 tests)
+cargo test -p unripe-setup             # Hardware detection (29 tests)
+cargo test -p unripe-mcp              # MCP client (6 tests)
 
 # Lint
 cargo clippy --workspace -- -D warnings
