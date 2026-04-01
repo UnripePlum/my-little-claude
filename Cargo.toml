@@ -5,6 +5,7 @@ members = [
     "crates/unripe-providers",
     "crates/unripe-tools",
     "crates/unripe-engine",
+    "crates/unripe-setup",
     "crates/unripe-cli",
 ]
 
