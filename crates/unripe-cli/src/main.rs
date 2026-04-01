@@ -41,6 +41,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Replay a saved session with a different model
+    Replay {
+        /// Session ID to replay (use 'list' to see available sessions)
+        session_id: String,
+
+        /// LLM provider for replay
+        #[arg(long)]
+        provider: Option<String>,
+
+        /// Model for replay
+        #[arg(long)]
+        model: Option<String>,
+    },
+
+    /// List saved sessions
+    Sessions,
+
     /// Detect hardware and set up a local model
     Setup {
         /// Performance preference: high, medium, light
@@ -335,6 +352,114 @@ async fn run_setup(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // Handle sessions list
+    if matches!(&cli.command, Some(Commands::Sessions)) {
+        let store = SessionStore::new()?;
+        let sessions = store.list()?;
+        if sessions.is_empty() {
+            eprintln!("No saved sessions found.");
+        } else {
+            eprintln!("\x1b[1mSaved sessions:\x1b[0m");
+            for id in &sessions {
+                match store.load(id) {
+                    Ok(s) => {
+                        eprintln!(
+                            "  {} | {} / {} | {} turns | {} messages",
+                            &s.id[..8],
+                            s.provider,
+                            s.model,
+                            s.turn_count,
+                            s.messages.len()
+                        );
+                    }
+                    Err(_) => eprintln!("  {} (corrupted)", &id[..8.min(id.len())]),
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // Handle replay
+    if let Some(Commands::Replay {
+        session_id,
+        provider: replay_provider,
+        model: replay_model,
+    }) = &cli.command
+    {
+        let store = SessionStore::new()?;
+
+        // Load session (support prefix matching)
+        let all = store.list()?;
+        let matched = all
+            .iter()
+            .find(|id| id.starts_with(session_id))
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No session found matching '{session_id}'"))?;
+
+        let original = store.load(&matched)?;
+        let config = UnripeConfig::load();
+
+        let prov_name = replay_provider.as_deref().unwrap_or(&original.provider);
+        let mdl = replay_model.as_deref().unwrap_or(&original.model);
+
+        eprintln!("\x1b[1m== Session Replay ==\x1b[0m");
+        eprintln!(
+            "  Original: {} / {} ({} turns)",
+            original.provider, original.model, original.turn_count
+        );
+        eprintln!("  Replay:   {} / {}", prov_name, mdl);
+
+        // Extract the user prompts from the original session
+        let user_prompts: Vec<String> = original
+            .messages
+            .iter()
+            .filter(|m| m.role == unripe_core::message::Role::User)
+            .map(|m| m.text_content())
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        if user_prompts.is_empty() {
+            eprintln!("  No user prompts found in session.");
+            return Ok(());
+        }
+
+        eprintln!("  Replaying {} user prompt(s)...\n", user_prompts.len());
+
+        let provider = build_provider(prov_name, mdl, &config)?;
+        let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let tools = unripe_tools::builtin_tools(config.agent.bash_timeout_secs);
+        let gate = DefaultPermissionGate::new(&project_root);
+
+        let engine = AgentEngine::new(
+            provider,
+            tools,
+            Box::new(gate),
+            config.agent.clone(),
+            project_root,
+        );
+
+        let mut new_session = Session::new(prov_name, mdl);
+        let callbacks = TerminalCallbacks;
+
+        for (i, prompt) in user_prompts.iter().enumerate() {
+            eprintln!(
+                "\x1b[36m--- Prompt {}/{} ---\x1b[0m",
+                i + 1,
+                user_prompts.len()
+            );
+            let reason = engine.run(prompt, &mut new_session, &callbacks).await?;
+            eprintln!("\n\x1b[90m(stop: {reason:?})\x1b[0m\n");
+        }
+
+        store.save(&new_session)?;
+        eprintln!(
+            "\n\x1b[32mReplay complete.\x1b[0m New session: {}",
+            &new_session.id[..8]
+        );
+
+        return Ok(());
+    }
 
     // Handle setup subcommand
     if let Some(Commands::Setup {
