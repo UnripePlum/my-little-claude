@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 unripe-core = { path = "../unripe-core" }
 unripe-engine = { path = "../unripe-engine" }
+unripe-mcp = { path = "../unripe-mcp" }
 unripe-setup = { path = "../unripe-setup" }
 unripe-providers = { path = "../unripe-providers" }
 unripe-tools = { path = "../unripe-tools" }

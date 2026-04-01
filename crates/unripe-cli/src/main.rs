@@ -407,7 +407,19 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let tools = unripe_tools::builtin_tools(config.agent.bash_timeout_secs);
+    let mut tools = unripe_tools::builtin_tools(config.agent.bash_timeout_secs);
+
+    // Load MCP tools from .mcp.json / ~/.claude.json / ~/.unripe/mcp.json
+    let mcp_config = unripe_mcp::load_mcp_config(&project_root);
+    if !mcp_config.mcp_servers.is_empty() {
+        let connections = unripe_mcp::connect_all(&mcp_config.mcp_servers).await;
+        let mcp_tools = unripe_mcp::connections_to_tools(connections);
+        if !mcp_tools.is_empty() {
+            eprintln!("\x1b[90m{} MCP tools loaded\x1b[0m", mcp_tools.len());
+            tools.extend(mcp_tools);
+        }
+    }
+
     let gate = DefaultPermissionGate::new(&project_root);
 
     let engine = AgentEngine::new(
