@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="my-little-claude" width="280" />
+
 <h1>my-little-claude</h1>
 
 <p><b>A model-agnostic coding agent harness in Rust.<br/>Plug any LLM. Run locally. Own your agent.</b></p>
@@ -24,9 +26,6 @@
 </div>
 
 ---
-
-<!-- TODO: Replace with actual asciinema recording -->
-<!-- [![demo](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX) -->
 
 my-little-claude is both a **working coding agent** and a **crate ecosystem** for building your own.
 
