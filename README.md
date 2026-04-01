@@ -4,6 +4,8 @@
 
 <h1>my-little-claude</h1>
 
+<img src="assets/demo.gif" alt="demo" width="600" />
+
 <p><b>A model-agnostic coding agent harness in Rust.<br/>Plug any LLM. Run locally. Own your agent.</b></p>
 
 <p>
