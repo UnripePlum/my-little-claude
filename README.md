@@ -17,6 +17,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/UnripePlum/my-little-claude/ci.yml?label=CI)](https://github.com/UnripePlum/my-little-claude/actions)
+[![Tests](https://img.shields.io/badge/tests-143%20passing-brightgreen)]()
 
 </p>
 
@@ -26,17 +27,18 @@
 
 my-little-claude is both a **working coding agent** and a **crate ecosystem** for building your own.
 
-Swap between Anthropic Claude and local ollama models with a flag. Add custom providers, tools, or permission policies by implementing a trait. The agent runs a streaming ReAct loop with built-in safety guards.
+Three providers (Anthropic, OpenAI, ollama), five tools, a tiered permission system, and session persistence. Swap models with a flag. Add custom providers, tools, or permission policies by implementing a trait.
 
 ## Features
 
-- **Model-agnostic** -- Anthropic Claude, local ollama, or implement `LlmProvider` for anything else
+- **3 providers built-in** -- Anthropic Claude, OpenAI GPT, local ollama. Or implement `LlmProvider` for anything.
+- **5 tools** -- `read_file`, `write_file`, `bash`, `glob`, `grep`. Extensible via the `Tool` trait.
 - **Streaming ReAct loop** -- tool calls and text stream in real-time with `stream_turn()`
 - **Tiered permission system** -- reads inside project auto-allowed, writes need approval, bash always asks
 - **Session persistence** -- conversations save to disk, resume with `--resume`
-- **Safety guards** -- max_turns (25), token_budget (100K), bash timeout (30s), all configurable
+- **Auto-setup** -- `unripe setup` detects your hardware and downloads the right local model
+- **Safety guards** -- max_turns (25), token_budget (100K), bash timeout (30s), Ctrl+C graceful shutdown
 - **Local-first** -- run with ollama, no API key, no internet required
-- **Extensible** -- custom providers, tools, and permission gates are one trait impl away
 
 ## Quick Start
 
@@ -46,14 +48,38 @@ git clone https://github.com/UnripePlum/my-little-claude
 cd my-little-claude
 cargo build --release
 
-# With Anthropic API
-export ANTHROPIC_API_KEY=sk-ant-...
+# Enable pre-commit hooks (fmt + clippy + test on every commit)
+git config core.hooksPath .githooks
+```
+
+**Option A: Local model (no API key needed)**
+
+```bash
+# Auto-detect hardware and download the best model for your machine
+./target/release/unripe setup
+
+# Run the agent
 ./target/release/unripe "describe what this repo does"
+```
 
-# With local ollama (no API key needed)
-./target/release/unripe --provider ollama --model qwen2.5-coder:7b "fix the typo in main.rs"
+**Option B: Cloud API**
 
-# Resume previous session
+```bash
+# Anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+./target/release/unripe "fix the bug in main.rs"
+
+# OpenAI
+export OPENAI_API_KEY=sk-...
+./target/release/unripe --provider openai --model gpt-4o "refactor this function"
+
+# Ollama (manual model selection)
+./target/release/unripe --provider ollama --model qwen2.5-coder:7b "add error handling"
+```
+
+**Resume a session:**
+
+```bash
 ./target/release/unripe --resume "continue where we left off"
 ```
 
@@ -61,7 +87,6 @@ Or install directly:
 
 ```bash
 cargo install unripe-cli
-unripe "hello"
 ```
 
 ## Architecture
@@ -72,36 +97,38 @@ unripe "hello"
                           │   (clap)    │
                           └──────┬──────┘
                                  │
-                          ┌──────▼──────────┐
-                          │  unripe-engine  │
-                          │                 │
-                          │  ReAct Loop:    │
-                          │  prompt         │
-                          │   → LLM call    │
-                          │   → tool use?   │
-                          │     → permit?   │
-                          │     → execute   │
-                          │   → repeat      │
-                          │   → stream text │
-                          └──┬──────────┬───┘
-                             │          │
-                     ┌───────▼──┐  ┌───▼───────────┐
-                     │  tools   │  │   providers    │
-                     │          │  │                │
-                     │ read_file│  │  anthropic     │
-                     │ write    │  │  ollama        │
-                     │ bash     │  │  (your own)    │
-                     └────┬─────┘  └────┬───────────┘
-                          │             │
-                     ┌────▼─────────────▼────┐
-                     │      unripe-core      │
-                     │                       │
-                     │  LlmProvider  trait    │
-                     │  Tool         trait    │
-                     │  PermissionGate trait  │
-                     │  Message, Session,     │
-                     │  Config types          │
-                     └───────────────────────┘
+                    ┌────────────┼────────────┐
+                    │            │             │
+             ┌──────▼───────┐   │   ┌─────────▼────────┐
+             │ unripe-setup │   │   │   unripe-engine   │
+             │              │   │   │                   │
+             │ sysinfo      │   │   │  ReAct Loop:      │
+             │ recommend    │   │   │  prompt → LLM     │
+             │ download     │   │   │  → tool use?      │
+             └──────────────┘   │   │    → permission?  │
+                                │   │    → execute      │
+                                │   │  → stream text    │
+                                │   └──┬──────────┬─────┘
+                                │      │          │
+                          ┌─────▼──┐  ┌▼──────────────┐
+                          │ tools  │  │   providers    │
+                          │        │  │                │
+                          │ read   │  │  anthropic     │
+                          │ write  │  │  openai        │
+                          │ bash   │  │  ollama        │
+                          │ glob   │  │  (your own)    │
+                          │ grep   │  │                │
+                          └───┬────┘  └───┬────────────┘
+                              │           │
+                          ┌───▼───────────▼───┐
+                          │    unripe-core     │
+                          │                    │
+                          │ LlmProvider trait   │
+                          │ Tool        trait   │
+                          │ PermissionGate trait│
+                          │ Message, Session,   │
+                          │ Config types        │
+                          └────────────────────┘
 ```
 
 ### Crate Map
@@ -109,9 +136,10 @@ unripe "hello"
 | Crate | What it does |
 |-------|-------------|
 | **unripe-core** | Traits (`LlmProvider`, `Tool`, `PermissionGate`) and shared types |
-| **unripe-engine** | Agent loop -- bootstrap, ReAct cycle, session truncation, guards |
-| **unripe-providers** | Anthropic Messages API (streaming SSE) + ollama (OpenAI-compat) |
-| **unripe-tools** | `read_file`, `write_file`, `bash` with timeout and error handling |
+| **unripe-engine** | Agent loop: bootstrap, ReAct cycle, session truncation, guards |
+| **unripe-providers** | Anthropic (streaming SSE), OpenAI (chat completions), ollama (local) |
+| **unripe-tools** | `read_file`, `write_file`, `bash` (timeout), `glob`, `grep` |
+| **unripe-setup** | Hardware detection, model recommendation, ollama download |
 | **unripe-cli** | Binary entry point with clap, permission prompts, colored output |
 
 ## How It Works
@@ -129,13 +157,11 @@ Agent Loop (max 25 turns)
   ├─▶ Send messages + tool definitions to LLM
   │
   ├─▶ LLM returns tool_use(read_file, {path: "main.rs"})
-  │     │
   │     ├─ PermissionGate: FileRead inside project → Allow
   │     ├─ Execute read_file → Success("fn main() { ... }")
   │     └─ Append tool result to messages
   │
   ├─▶ LLM returns tool_use(write_file, {path: "main.rs", content: "..."})
-  │     │
   │     ├─ PermissionGate: FileWrite → Ask
   │     ├─ Terminal: "[Permission] Write file: main.rs [y/N]"
   │     ├─ User types: y
@@ -143,7 +169,6 @@ Agent Loop (max 25 turns)
   │     └─ Append tool result to messages
   │
   └─▶ LLM returns text("Fixed the bug. The issue was...")
-        │
         └─ Stream to terminal, save session, done.
 ```
 
@@ -154,6 +179,7 @@ Agent Loop (max 25 turns)
 | `read_file` | Allow | Ask |
 | `write_file` | Ask | **Deny** |
 | `bash` | Ask | Ask |
+| `glob` / `grep` | Allow | Ask |
 
 Implement `PermissionGate` for custom policies:
 
@@ -191,9 +217,16 @@ default_model = "qwen2.5-coder:7b"
 [provider.anthropic]
 api_key_env = "ANTHROPIC_API_KEY"
 
+[provider.openai]
+api_key_env = "OPENAI_API_KEY"
+# base_url = "https://api.together.xyz"  # OpenAI-compatible APIs
+
 [provider.ollama]
 base_url = "http://localhost:11434"
 ```
+
+> [!TIP]
+> Run `unripe setup` to auto-generate this config with the best model for your hardware.
 
 ## <a name="extend"></a>Extend
 
@@ -231,23 +264,19 @@ use unripe_core::tool::{Tool, ToolContext, ToolResult};
 
 #[async_trait::async_trait]
 impl Tool for MyTool {
-    fn name(&self) -> &str { "grep" }
-    fn description(&self) -> &str { "Search files for a pattern" }
+    fn name(&self) -> &str { "my_tool" }
+    fn description(&self) -> &str { "Does something useful" }
     fn schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
-            "properties": {
-                "pattern": { "type": "string" },
-                "path": { "type": "string" }
-            },
-            "required": ["pattern"]
+            "properties": { "input": { "type": "string" } },
+            "required": ["input"]
         })
     }
 
     async fn execute(&self, input: serde_json::Value, ctx: &ToolContext) -> anyhow::Result<ToolResult> {
-        let pattern = input["pattern"].as_str().unwrap_or("");
-        // ... run grep logic ...
-        Ok(ToolResult::Success("matching lines here".into()))
+        let val = input["input"].as_str().unwrap_or("");
+        Ok(ToolResult::Success(format!("processed: {val}")))
     }
 }
 ```
@@ -264,29 +293,32 @@ impl Tool for MyTool {
 | Session truncation | Keep last 10 messages | `config.toml` |
 | Ctrl+C | Kills child processes, exits | -- |
 
-## Testing
+## Development
 
 ```bash
-cargo test --workspace        # Run all 93 tests
-cargo test -p unripe-core     # Core traits and types (41 tests)
-cargo test -p unripe-engine   # Engine loop (12 tests)
-cargo test -p unripe-providers # Anthropic + ollama (23 tests)
-cargo test -p unripe-tools    # read/write/bash tools (17 tests)
+# Setup
+git config core.hooksPath .githooks   # pre-commit: fmt + clippy + test
+
+# Test
+cargo test --workspace                 # 143 tests across 6 crates
+cargo test -p unripe-core              # Core traits (41 tests)
+cargo test -p unripe-engine            # Engine loop (12 tests)
+cargo test -p unripe-providers         # 3 providers + SSE (39 tests)
+cargo test -p unripe-tools             # 5 tools (28 tests)
+cargo test -p unripe-setup             # Hardware detection (23 tests)
+
+# Lint
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
 ```
 
 ## Roadmap
 
-### v0.1.1
-
-- `unripe setup` -- detect hardware specs, recommend a model, download via ollama
-
-### v0.2
+### Next
 
 - Tower-style middleware pipeline -- composable agent behaviors, "the Axum of agents"
 - Deterministic session replay -- record and replay agent sessions with different models
 - MCP client support
-- OpenAI provider
-- `glob` / `grep` tools
 - Rich TUI with ratatui
 - Chat-only fallback for models without tool calling
 
