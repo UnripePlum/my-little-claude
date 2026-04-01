@@ -414,13 +414,14 @@ fn infer_tool_action(
             };
             ToolAction::FileRead(path)
         }
-        "web_fetch" => {
-            let url = input
+        "web_fetch" | "web_search" => {
+            let url_or_query = input
                 .get("url")
+                .or_else(|| input.get("query"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
-            ToolAction::NetworkRequest(url)
+            ToolAction::NetworkRequest(url_or_query)
         }
         _ => ToolAction::NetworkRequest(format!("unknown tool: {name}")),
     }

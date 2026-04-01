@@ -21,7 +21,7 @@
 [![Rust](https://img.shields.io/badge/Rust-2021-orange?logo=rust)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/UnripePlum/my-little-claude/ci.yml?label=CI)](https://github.com/UnripePlum/my-little-claude/actions)
-[![Tests](https://img.shields.io/badge/tests-156%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-187%20passing-brightgreen)]()
 
 </p>
 
@@ -35,13 +35,17 @@ Three providers (Anthropic, OpenAI, ollama), five tools, MCP plugin support, a t
 
 ## Features
 
+- **Interactive REPL** -- conversational loop with `/undo`, `/clear`, `/save`, `/skills` commands
 - **3 providers built-in** -- Anthropic Claude, OpenAI GPT, local ollama. Or implement `LlmProvider` for anything.
-- **5 tools** -- `read_file`, `write_file`, `bash`, `glob`, `grep`. Extensible via the `Tool` trait.
+- **8 tools** -- `read_file`, `write_file`, `edit_file`, `bash`, `glob`, `grep`, `web_fetch`, `web_search`. Extensible via the `Tool` trait.
 - **Streaming ReAct loop** -- tool calls and text stream in real-time with `stream_turn()`
-- **Tiered permission system** -- reads inside project auto-allowed, writes need approval, bash always asks
+- **Tiered permission system** -- reads auto-allowed, writes need approval, or `--no-permission` for no guardrails
+- **Checkpoints** -- automatic file backup before edits, `/undo` to restore
+- **Hooks system** -- `pre_tool_use` / `post_tool_use` shell commands for automation
+- **Skills system** -- reusable markdown prompts from `.unripe/skills/` as `/skill-name` commands
 - **Session persistence** -- conversations save to disk, resume with `--resume`
 - **Auto-setup** -- `unripe setup` detects your hardware and downloads the right local model
-- **Safety guards** -- max_turns (25), token_budget (100K), bash timeout (30s), Ctrl+C graceful shutdown
+- **Non-interactive mode** -- `--print` for CI/scripting, `--yes` for auto-approve
 - **MCP plugin support** -- compatible with Claude Code's `.mcp.json`, extend with any MCP server
 - **Local-first** -- run with ollama, no API key, no internet required
 
@@ -79,11 +83,23 @@ unripe --provider openai --model gpt-4o "refactor this function"
 unripe --provider ollama --model qwen3.5:9b "add error handling"
 ```
 
+**Interactive REPL:**
+
+```bash
+unripe                                          # enter interactive mode
+unripe> fix the bug in main.rs
+unripe> /undo                                   # undo last file edit
+unripe> /skills                                 # list available skills
+unripe> /exit
+```
+
 **More:**
 
 ```bash
 unripe --resume "continue where we left off"    # resume session
 unripe --chat "explain this code"               # chat-only, no tools
+unripe --print "what does this do" | head       # CI/scripting mode
+unripe --no-permission "refactor everything"    # no guardrails
 unripe sessions                                 # list saved sessions
 unripe replay <id> --model qwen3.5:9b           # replay with different model
 ```
@@ -301,11 +317,11 @@ impl Tool for MyTool {
 git config core.hooksPath .githooks   # pre-commit: fmt + clippy + test
 
 # Test
-cargo test --workspace                 # 156 tests across 7 crates
-cargo test -p unripe-core              # Core traits (41 tests)
-cargo test -p unripe-engine            # Engine loop (13 tests)
+cargo test --workspace                 # 187 tests across 7 crates
+cargo test -p unripe-core              # Core traits (42 tests)
+cargo test -p unripe-engine            # Engine + checkpoints (19 tests)
 cargo test -p unripe-providers         # 3 providers + SSE (39 tests)
-cargo test -p unripe-tools             # 5 tools (28 tests)
+cargo test -p unripe-tools             # 8 tools (52 tests)
 cargo test -p unripe-setup             # Hardware detection (29 tests)
 cargo test -p unripe-mcp              # MCP client (6 tests)
 
@@ -316,17 +332,25 @@ cargo fmt --all -- --check
 
 ## Roadmap
 
-### v0.3 (next)
+### v0.3 (current)
 
-- Interactive REPL -- conversational loop, not one-shot
-- Edit tool -- precise string replacement (old→new), not full file overwrite
+- ~~Interactive REPL~~ ✓
+- ~~Edit tool~~ ✓
+- ~~Hooks system~~ ✓
+- ~~CLAUDE.md 4-level hierarchy~~ ✓
+- ~~Skills system~~ ✓
+- ~~Checkpoints + /undo~~ ✓
+- ~~Non-interactive mode (`--print`)~~ ✓
+- ~~WebFetch/WebSearch tools~~ ✓
+- ~~`--no-permission` flag~~ ✓
+
+### v0.4 (next)
+
 - Sub-agents -- split complex tasks into parallel workstreams
-- Hooks system -- PreToolUse/PostToolUse event automation
-- CLAUDE.md 4-level hierarchy (managed→user→project→local)
-- Skills system -- markdown-based reusable prompts as slash commands
-- Checkpoints -- snapshot before edits, undo on failure
-- Non-interactive mode (`--print`) for CI/scripting
-- WebFetch/WebSearch tools
+- Streaming output -- real-time token streaming in REPL
+- Context window management -- smarter truncation with summarization
+- Plugin marketplace -- discover and install community skills
+- Multi-file edit -- atomic edits across multiple files
 
 ## License
 

@@ -4,6 +4,7 @@ pub mod glob;
 pub mod grep;
 pub mod read_file;
 pub mod web_fetch;
+pub mod web_search;
 pub mod write_file;
 
 pub use bash::BashTool;
@@ -12,6 +13,7 @@ pub use glob::GlobTool;
 pub use grep::GrepTool;
 pub use read_file::ReadFileTool;
 pub use web_fetch::WebFetchTool;
+pub use web_search::WebSearchTool;
 pub use write_file::WriteFileTool;
 
 use unripe_core::tool::Tool;
@@ -26,5 +28,6 @@ pub fn builtin_tools(bash_timeout_secs: u64) -> Vec<Box<dyn Tool>> {
         Box::new(GlobTool),
         Box::new(GrepTool),
         Box::new(WebFetchTool::new()),
+        Box::new(WebSearchTool::new()),
     ]
 }

@@ -46,6 +46,10 @@ struct Cli {
     /// Auto-approve all permission prompts (use with --print for CI)
     #[arg(long)]
     yes: bool,
+
+    /// Disable all permission checks — no guardrails mode
+    #[arg(long)]
+    no_permission: bool,
 }
 
 #[derive(Subcommand)]
@@ -192,6 +196,10 @@ impl EngineCallbacks for TerminalCallbacks {
             "web_fetch" => {
                 let url = input.get("url").and_then(|v| v.as_str()).unwrap_or("?");
                 eprintln!("\x1b[34m  ╭─ fetch \x1b[1m{url}\x1b[0m");
+            }
+            "web_search" => {
+                let query = input.get("query").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[34m  ╭─ search \x1b[1m{query}\x1b[0m");
             }
             _ => {
                 eprintln!("\x1b[36m  ╭─ {tool_name}\x1b[0m");
@@ -671,16 +679,15 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let gate = DefaultPermissionGate::new(&project_root);
+    let gate: Box<dyn unripe_core::permission::PermissionGate> = if cli.no_permission || cli.yes {
+        eprintln!("\x1b[33m[no-permission] All tool actions auto-approved.\x1b[0m");
+        Box::new(unripe_core::permission::AutoApproveGate)
+    } else {
+        Box::new(DefaultPermissionGate::new(&project_root))
+    };
 
-    let engine = AgentEngine::new(
-        provider,
-        tools,
-        Box::new(gate),
-        config.agent.clone(),
-        project_root,
-    )
-    .with_chat_only(chat_only);
+    let engine = AgentEngine::new(provider, tools, gate, config.agent.clone(), project_root)
+        .with_chat_only(chat_only);
 
     let session_store = SessionStore::new()?;
     let mut session = if cli.resume {
