@@ -37,14 +37,15 @@ fn load_model_catalog() -> Vec<ModelRecommendation> {
 
 /// Model recommendation matrix
 /// Rows: performance preference, Columns: system tier
+/// Updated 2026-04: uses qwen3.5 (multimodal, tool calling) and devstral (coding agent)
 const MATRIX: [[&str; 3]; 3] = [
-    // [High tier, Medium tier, Low tier]
-    // High preference
-    ["qwen2.5-coder:32b", "qwen2.5-coder:14b", "qwen2.5-coder:7b"],
-    // Medium preference
-    ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "qwen2.5-coder:3b"],
-    // Light preference
-    ["qwen2.5-coder:7b", "qwen2.5-coder:3b", "qwen2.5-coder:1.5b"],
+    // [High tier (16GB+), Medium tier (8-16GB), Low tier (<8GB)]
+    // High preference: best quality
+    ["devstral-small-2:24b", "qwen3.5:9b", "qwen3.5:4b"],
+    // Medium preference: balanced
+    ["qwen3.5:9b", "qwen3.5:4b", "qwen3.5:2b"],
+    // Light preference: fastest
+    ["qwen3.5:4b", "qwen3.5:2b", "qwen3.5:2b"],
 ];
 
 /// Get model details for a given model name from the catalog
@@ -122,27 +123,27 @@ mod tests {
     fn test_high_tier_high_pref() {
         let s = sys(64.0, "x86_64", "linux", Some(24.0));
         let rec = recommend(&s, PerformancePreference::High);
-        assert_eq!(rec.model, "qwen2.5-coder:32b");
+        assert_eq!(rec.model, "devstral-small-2:24b");
     }
 
     #[test]
     fn test_medium_tier_medium_pref() {
         let s = sys(16.0, "aarch64", "macos 15.0", None);
         let rec = recommend(&s, PerformancePreference::Medium);
-        assert_eq!(rec.model, "qwen2.5-coder:7b");
+        assert_eq!(rec.model, "qwen3.5:4b");
     }
 
     #[test]
     fn test_low_tier_light_pref() {
         let s = sys(8.0, "x86_64", "linux", None);
         let rec = recommend(&s, PerformancePreference::Light);
-        assert_eq!(rec.model, "qwen2.5-coder:1.5b");
+        assert_eq!(rec.model, "qwen3.5:2b");
     }
 
     #[test]
     fn test_downgrade_when_model_too_large() {
-        // 4GB effective memory, high pref on high tier would pick 32b (needs 20GB)
-        // Should downgrade
+        // 4GB effective memory, high pref would pick devstral-small-2:24b (needs 16GB)
+        // Should downgrade to something that fits
         let s = sys(8.0, "x86_64", "linux", None); // 4GB effective
         let rec = recommend(&s, PerformancePreference::High);
         assert!(
@@ -164,9 +165,8 @@ mod tests {
     #[test]
     fn test_available_models_count() {
         let models = available_models();
-        assert_eq!(models.len(), 5);
-        assert_eq!(models[0].model, "qwen2.5-coder:32b");
-        assert_eq!(models[4].model, "qwen2.5-coder:1.5b");
+        assert_eq!(models.len(), 10);
+        assert_eq!(models[0].model, "devstral-small-2:24b");
     }
 
     #[test]
@@ -178,10 +178,9 @@ mod tests {
 
     #[test]
     fn test_model_recommendation_serialization() {
-        let rec = model_details("qwen2.5-coder:7b");
+        let rec = model_details("qwen3.5:9b");
         let json = serde_json::to_string(&rec).unwrap();
         let parsed: ModelRecommendation = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.model, "qwen2.5-coder:7b");
-        assert_eq!(parsed.size_label, "7B");
+        assert_eq!(parsed.model, "qwen3.5:9b");
     }
 }

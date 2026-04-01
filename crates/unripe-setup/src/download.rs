@@ -130,10 +130,10 @@ mod tests {
     fn test_parse_ollama_list_exact_match() {
         let output = "NAME                ID              SIZE      MODIFIED\n\
                        llama3.2:3b         a80c4f17acd5    2.0 GB    5 days ago\n\
-                       qwen2.5-coder:7b    abc123def456    4.7 GB    2 days ago\n";
-        assert!(parse_ollama_list(output, "qwen2.5-coder:7b"));
+                       qwen3.5:9b    abc123def456    4.7 GB    2 days ago\n";
+        assert!(parse_ollama_list(output, "qwen3.5:9b"));
         assert!(parse_ollama_list(output, "llama3.2:3b"));
-        assert!(!parse_ollama_list(output, "qwen2.5-coder:7b-instruct"));
+        assert!(!parse_ollama_list(output, "qwen3.5:9b-instruct"));
         assert!(!parse_ollama_list(output, "qwen2.5-coder:14b"));
         assert!(!parse_ollama_list(output, "nonexistent:latest"));
     }
@@ -160,7 +160,7 @@ mod tests {
         };
         let pref = crate::recommend::PerformancePreference::Medium;
         let rec = crate::recommend::ModelRecommendation {
-            model: "qwen2.5-coder:7b".into(),
+            model: "qwen3.5:9b".into(),
             size_label: "7B".into(),
             description: "test".into(),
             estimated_ram_gb: 5.0,
@@ -176,7 +176,7 @@ mod tests {
 
         let loaded = UnripeConfig::load_from_path(&path);
         assert_eq!(loaded.provider.default_provider, "ollama");
-        assert_eq!(loaded.provider.default_model, "qwen2.5-coder:7b");
+        assert_eq!(loaded.provider.default_model, "qwen3.5:9b");
 
         std::fs::remove_dir_all(&dir).ok();
     }

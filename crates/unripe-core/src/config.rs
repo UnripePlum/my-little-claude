@@ -101,7 +101,7 @@ fn default_provider() -> String {
     "anthropic".into()
 }
 fn default_model() -> String {
-    "claude-sonnet-4-20250514".into()
+    "claude-sonnet-4-6-20250514".into()
 }
 
 impl Default for ProviderConfig {
@@ -225,7 +225,7 @@ mod tests {
     fn test_default_provider_config() {
         let config = ProviderConfig::default();
         assert_eq!(config.default_provider, "anthropic");
-        assert_eq!(config.default_model, "claude-sonnet-4-20250514");
+        assert_eq!(config.default_model, "claude-sonnet-4-6-20250514");
         assert_eq!(config.ollama.base_url, "http://localhost:11434");
     }
 

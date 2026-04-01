@@ -1,32 +1,62 @@
 [
   {
-    "model": "qwen2.5-coder:32b",
-    "size_label": "32B",
-    "description": "Largest, best quality. Needs 20GB+ memory.",
+    "model": "devstral-small-2:24b",
+    "size_label": "24B",
+    "description": "Mistral's coding agent model. Excels at tool use, codebase exploration, multi-file editing.",
+    "estimated_ram_gb": 16.0
+  },
+  {
+    "model": "qwen3-coder:30b-a3b",
+    "size_label": "30B (3B active)",
+    "description": "Alibaba's coding MoE. Only 3B active params, 128K context, strong tool calling.",
     "estimated_ram_gb": 20.0
   },
   {
-    "model": "qwen2.5-coder:14b",
-    "size_label": "14B",
-    "description": "Strong quality with good speed. Needs 10GB+ memory.",
-    "estimated_ram_gb": 10.0
+    "model": "glm-4.7-flash:30b",
+    "size_label": "30B",
+    "description": "Zhipu's efficient model. Strong planning, multi-step tool use, code generation.",
+    "estimated_ram_gb": 20.0
   },
   {
-    "model": "qwen2.5-coder:7b",
-    "size_label": "7B",
-    "description": "Good balance of quality and speed. Needs 5GB+ memory.",
-    "estimated_ram_gb": 5.0
+    "model": "qwen3.5:27b",
+    "size_label": "27B",
+    "description": "Latest Qwen multimodal. Tool calling, 128K context, strong reasoning.",
+    "estimated_ram_gb": 18.0
   },
   {
-    "model": "qwen2.5-coder:3b",
-    "size_label": "3B",
-    "description": "Fast responses, moderate quality. Needs 2.5GB+ memory.",
-    "estimated_ram_gb": 2.5
+    "model": "qwen3.5:9b",
+    "size_label": "9B",
+    "description": "Good quality/speed balance. Tool calling support, multimodal.",
+    "estimated_ram_gb": 6.0
   },
   {
-    "model": "qwen2.5-coder:1.5b",
-    "size_label": "1.5B",
-    "description": "Fastest, minimal resources. Needs 1.5GB+ memory.",
+    "model": "qwen3.5:4b",
+    "size_label": "4B",
+    "description": "Fast and lightweight. Tool calling, suitable for 8GB machines.",
+    "estimated_ram_gb": 3.0
+  },
+  {
+    "model": "qwen3.5:2b",
+    "size_label": "2B",
+    "description": "Minimal resources. Basic tool calling, fast responses.",
     "estimated_ram_gb": 1.5
+  },
+  {
+    "model": "llama3.3:70b",
+    "size_label": "70B",
+    "description": "Meta's largest Llama. Strong coding + tool calling. Needs 48GB+ memory.",
+    "estimated_ram_gb": 48.0
+  },
+  {
+    "model": "nemotron-cascade-2:30b",
+    "size_label": "30B (3B active)",
+    "description": "NVIDIA's MoE. Strong reasoning and agentic capabilities, 3B active params.",
+    "estimated_ram_gb": 20.0
+  },
+  {
+    "model": "ministral-3:8b",
+    "size_label": "8B",
+    "description": "Mistral's edge model. Designed for on-device deployment with tool calling.",
+    "estimated_ram_gb": 5.0
   }
 ]
