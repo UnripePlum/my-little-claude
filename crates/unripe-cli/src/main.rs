@@ -95,11 +95,17 @@ enum Commands {
     },
 }
 
-struct TerminalCallbacks;
+struct TerminalCallbacks {
+    auto_yes: bool,
+}
 
 #[async_trait::async_trait]
 impl EngineCallbacks for TerminalCallbacks {
     async fn ask_permission(&self, prompt: &str) -> bool {
+        if self.auto_yes {
+            eprintln!("\x1b[33m[Permission] {prompt}\x1b[0m [auto-yes]");
+            return true;
+        }
         eprint!("\x1b[33m[Permission] {prompt}\x1b[0m [y/N] ");
         std::io::stderr().flush().ok();
         let mut input = String::new();
@@ -585,7 +591,7 @@ async fn main() -> anyhow::Result<()> {
         );
 
         let mut new_session = Session::new(prov_name, mdl);
-        let callbacks = TerminalCallbacks;
+        let callbacks = TerminalCallbacks { auto_yes: false };
 
         for (i, prompt) in user_prompts.iter().enumerate() {
             eprintln!(
@@ -679,7 +685,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let gate: Box<dyn unripe_core::permission::PermissionGate> = if cli.no_permission || cli.yes {
+    let gate: Box<dyn unripe_core::permission::PermissionGate> = if cli.no_permission {
         eprintln!("\x1b[33m[no-permission] All tool actions auto-approved.\x1b[0m");
         Box::new(unripe_core::permission::AutoApproveGate)
     } else {
@@ -720,7 +726,7 @@ async fn main() -> anyhow::Result<()> {
                 let _reason = engine.run(&prompt, &mut session, &callbacks).await?;
                 println!(); // trailing newline
             } else {
-                let callbacks = TerminalCallbacks;
+                let callbacks = TerminalCallbacks { auto_yes: cli.yes };
                 let reason = engine.run(&prompt, &mut session, &callbacks).await?;
 
                 let _path = session_store.save(&session)?;
@@ -838,7 +844,7 @@ async fn run_repl(
 
     eprintln!("\x1b[90mInteractive mode. Type /help for commands, Ctrl+D to exit.\x1b[0m\n");
 
-    let callbacks = TerminalCallbacks;
+    let callbacks = TerminalCallbacks { auto_yes: false };
     let mut turn_number: u32 = 0;
 
     let history_path = dirs::home_dir()

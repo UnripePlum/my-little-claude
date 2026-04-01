@@ -336,14 +336,27 @@ impl AgentEngine {
 
         for hook in matching {
             let input_str = serde_json::to_string(input).unwrap_or_default();
-            let result = tokio::process::Command::new("sh")
+            let cmd_fut = tokio::process::Command::new("sh")
                 .arg("-c")
                 .arg(&hook.command)
                 .env("TOOL_NAME", tool_name)
                 .env("TOOL_INPUT", &input_str)
                 .env("HOOK_EVENT", event)
-                .output()
-                .await;
+                .current_dir(&self.project_root)
+                .output();
+            let result = tokio::time::timeout(std::time::Duration::from_secs(10), cmd_fut).await;
+            let result = match result {
+                Ok(r) => r,
+                Err(_) => {
+                    callbacks
+                        .on_text(&format!(
+                            "\n\x1b[31m[Hook timed out after 10s: {}]\x1b[0m\n",
+                            hook.command
+                        ))
+                        .await;
+                    continue;
+                }
+            };
 
             match result {
                 Ok(output) if !output.status.success() => {

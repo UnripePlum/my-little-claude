@@ -76,8 +76,8 @@ impl Tool for WebFetchTool {
             ));
         }
 
-        // SSRF protection: block private/internal addresses
-        if let Err(reason) = check_ssrf(url) {
+        // SSRF protection: block private/internal addresses + DNS rebinding
+        if let Err(reason) = check_ssrf(url).await {
             return Ok(ToolResult::Failure(reason));
         }
 
@@ -130,14 +130,22 @@ impl Tool for WebFetchTool {
     }
 }
 
-/// Check if a URL targets a private/internal address (SSRF protection)
-fn check_ssrf(url: &str) -> Result<(), String> {
+/// Check if a URL targets a private/internal address (SSRF protection).
+/// Performs both hostname blocklist and DNS resolution check to prevent
+/// DNS rebinding attacks (e.g., evil.com resolving to 127.0.0.1).
+async fn check_ssrf(url: &str) -> Result<(), String> {
     let parsed = reqwest::Url::parse(url).map_err(|e| format!("Invalid URL: {e}"))?;
 
     let host = parsed.host_str().unwrap_or("");
+    let port = parsed.port_or_known_default().unwrap_or(80);
 
     // Block known internal hostnames
-    let blocked_hosts = ["localhost", "metadata.google.internal", "metadata"];
+    let blocked_hosts = [
+        "localhost",
+        "metadata.google.internal",
+        "metadata",
+        "169.254.169.254",
+    ];
     let host_lower = host.to_lowercase();
     for blocked in &blocked_hosts {
         if host_lower == *blocked || host_lower.ends_with(&format!(".{blocked}")) {
@@ -145,18 +153,30 @@ fn check_ssrf(url: &str) -> Result<(), String> {
         }
     }
 
-    // Try parsing as IP address
-    if let Ok(ip) = host.parse::<IpAddr>() {
+    // Check if host is a literal IP
+    let trimmed = host.trim_start_matches('[').trim_end_matches(']');
+    if let Ok(ip) = trimmed.parse::<IpAddr>() {
         if is_private_ip(ip) {
             return Err(format!("Requests to private IP {ip} are blocked"));
         }
     }
 
-    // Also check if it looks like an IP in brackets (IPv6)
-    let trimmed = host.trim_start_matches('[').trim_end_matches(']');
-    if let Ok(ip) = trimmed.parse::<IpAddr>() {
-        if is_private_ip(ip) {
-            return Err(format!("Requests to private IP {ip} are blocked"));
+    // DNS resolution check: resolve hostname and verify all IPs are public.
+    // This prevents DNS rebinding attacks where a public hostname resolves to 127.0.0.1.
+    let addr = format!("{host}:{port}");
+    match tokio::net::lookup_host(&addr).await {
+        Ok(addrs) => {
+            for addr in addrs {
+                if is_private_ip(addr.ip()) {
+                    return Err(format!(
+                        "DNS for '{host}' resolves to private IP {} — blocked",
+                        addr.ip()
+                    ));
+                }
+            }
+        }
+        Err(_) => {
+            // DNS resolution failed — let reqwest handle the error naturally
         }
     }
 
@@ -277,21 +297,21 @@ mod tests {
         assert!(matches!(result, ToolResult::Failure(msg) if msg.contains("blocked")));
     }
 
-    #[test]
-    fn test_check_ssrf_allows_public() {
-        assert!(check_ssrf("https://example.com").is_ok());
-        assert!(check_ssrf("https://api.github.com/repos").is_ok());
+    #[tokio::test]
+    async fn test_check_ssrf_allows_public() {
+        assert!(check_ssrf("https://example.com").await.is_ok());
+        assert!(check_ssrf("https://api.github.com/repos").await.is_ok());
     }
 
-    #[test]
-    fn test_check_ssrf_blocks_private() {
-        assert!(check_ssrf("http://localhost/").is_err());
-        assert!(check_ssrf("http://127.0.0.1/").is_err());
-        assert!(check_ssrf("http://10.0.0.1/").is_err());
-        assert!(check_ssrf("http://172.16.0.1/").is_err());
-        assert!(check_ssrf("http://192.168.1.1/").is_err());
-        assert!(check_ssrf("http://169.254.169.254/").is_err());
-        assert!(check_ssrf("http://[::1]/").is_err());
+    #[tokio::test]
+    async fn test_check_ssrf_blocks_private() {
+        assert!(check_ssrf("http://localhost/").await.is_err());
+        assert!(check_ssrf("http://127.0.0.1/").await.is_err());
+        assert!(check_ssrf("http://10.0.0.1/").await.is_err());
+        assert!(check_ssrf("http://172.16.0.1/").await.is_err());
+        assert!(check_ssrf("http://192.168.1.1/").await.is_err());
+        assert!(check_ssrf("http://169.254.169.254/").await.is_err());
+        assert!(check_ssrf("http://[::1]/").await.is_err());
     }
 
     #[test]
