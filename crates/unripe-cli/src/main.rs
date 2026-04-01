@@ -374,7 +374,30 @@ async fn main() -> anyhow::Result<()> {
 
     let provider = build_provider(provider_name, model, &config)?;
 
-    let mode_label = if cli.chat { " | chat-only" } else { "" };
+    // Auto-detect chat-only mode from model catalog
+    let mut chat_only = cli.chat;
+    if !chat_only && provider_name == "ollama" {
+        let catalog = unripe_setup::recommend::available_models();
+        let known = catalog.iter().find(|m| m.model == model);
+        match known {
+            Some(m) if !m.tool_calling => {
+                eprintln!(
+                    "\x1b[33m[auto] {} does not support tool calling. Switching to chat-only mode.\x1b[0m",
+                    model
+                );
+                chat_only = true;
+            }
+            None => {
+                eprintln!(
+                    "\x1b[33m[hint] Model '{}' is not in the catalog. If tool calling fails, try: --chat\x1b[0m",
+                    model
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let mode_label = if chat_only { " | chat-only" } else { "" };
     eprintln!(
         "\x1b[90mmy-little-claude v{} | {} / {}{}\x1b[0m",
         env!("CARGO_PKG_VERSION"),
@@ -394,7 +417,7 @@ async fn main() -> anyhow::Result<()> {
         config.agent.clone(),
         project_root,
     )
-    .with_chat_only(cli.chat);
+    .with_chat_only(chat_only);
 
     let session_store = SessionStore::new()?;
     let mut session = if cli.resume {
