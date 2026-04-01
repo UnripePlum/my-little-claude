@@ -1,0 +1,17 @@
+[package]
+name = "unripe-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Built-in tool implementations for unripe-claude"
+
+[dependencies]
+unripe-core = { path = "../unripe-core" }
+anyhow.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

@@ -1,0 +1,19 @@
+[package]
+name = "unripe-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Agent engine loop for unripe-claude"
+
+[dependencies]
+unripe-core = { path = "../unripe-core" }
+anyhow.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+unripe-tools = { path = "../unripe-tools" }

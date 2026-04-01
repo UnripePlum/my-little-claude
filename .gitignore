@@ -1,0 +1,6 @@
+/target
+.omc/
+.DS_Store
+*.swp
+*.swo
+~/.unripe/

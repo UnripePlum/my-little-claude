@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/unripe-core",
+    "crates/unripe-providers",
+    "crates/unripe-tools",
+    "crates/unripe-engine",
+    "crates/unripe-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/unripeplum/unripe-claude"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+dirs = "5"
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
+uuid = { version = "1", features = ["v4"] }
+pin-project-lite = "0.2"
