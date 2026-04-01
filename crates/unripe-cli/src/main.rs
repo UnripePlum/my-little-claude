@@ -135,6 +135,22 @@ impl EngineCallbacks for TerminalCallbacks {
     }
 }
 
+fn print_banner(provider: &str, model: &str, mode: &str) {
+    eprintln!("\x1b[38;5;209m  ╭──────────╮");
+    eprintln!("\x1b[38;5;209m  │  ┌\x1b[32m>_\x1b[38;5;209m┐   │");
+    eprintln!("\x1b[38;5;209m  │  └──┘   │╲");
+    eprintln!("\x1b[38;5;209m  │  \x1b[1;30m◕\x1b[0m\x1b[38;5;209m  \x1b[1;30m◕\x1b[0m\x1b[38;5;209m  │ ╲");
+    eprintln!("\x1b[38;5;209m  │ \x1b[38;5;218m•\x1b[38;5;209m \x1b[38;5;74m╰‿╯\x1b[38;5;209m \x1b[38;5;218m•\x1b[38;5;209m│  │");
+    eprintln!("\x1b[38;5;209m  ╰──────────╯  │");
+    eprintln!("\x1b[38;5;173m   ╲__________╲_│\x1b[0m");
+    eprintln!(
+        "  \x1b[1mmy-little-claude\x1b[0m v{}",
+        env!("CARGO_PKG_VERSION")
+    );
+    eprintln!("  \x1b[90m{} / {}{}\x1b[0m", provider, model, mode);
+    eprintln!();
+}
+
 fn build_provider(
     provider_name: &str,
     model: &str,
@@ -523,13 +539,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mode_label = if chat_only { " | chat-only" } else { "" };
-    eprintln!(
-        "\x1b[90mmy-little-claude v{} | {} / {}{}\x1b[0m",
-        env!("CARGO_PKG_VERSION"),
-        provider_name,
-        model,
-        mode_label
-    );
+    print_banner(provider_name, model, mode_label);
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let mut tools = unripe_tools::builtin_tools(config.agent.bash_timeout_secs);
