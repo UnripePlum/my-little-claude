@@ -45,50 +45,44 @@ Three providers (Anthropic, OpenAI, ollama), five tools, a tiered permission sys
 ## Quick Start
 
 ```bash
-# Clone and build
+cargo install unripe-cli
+```
+
+Or build from source:
+
+```bash
 git clone https://github.com/UnripePlum/my-little-claude
 cd my-little-claude
 cargo build --release
-
-# Enable pre-commit hooks (fmt + clippy + test on every commit)
-git config core.hooksPath .githooks
+# Binary at target/release/unripe
 ```
 
 **Option A: Local model (no API key needed)**
 
 ```bash
-# Auto-detect hardware and download the best model for your machine
-./target/release/unripe setup
-
-# Run the agent
-./target/release/unripe "describe what this repo does"
+unripe setup                                    # detect hardware, download best model
+unripe "describe what this repo does"           # run the agent
 ```
 
 **Option B: Cloud API**
 
 ```bash
-# Anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
-./target/release/unripe "fix the bug in main.rs"
+unripe "fix the bug in main.rs"
 
-# OpenAI
 export OPENAI_API_KEY=sk-...
-./target/release/unripe --provider openai --model gpt-4o "refactor this function"
+unripe --provider openai --model gpt-4o "refactor this function"
 
-# Ollama (manual model selection)
-./target/release/unripe --provider ollama --model qwen2.5-coder:7b "add error handling"
+unripe --provider ollama --model qwen3.5:9b "add error handling"
 ```
 
-**Resume a session:**
+**More:**
 
 ```bash
-./target/release/unripe --resume "continue where we left off"
-```
-
-Or install directly:
-
-```bash
-cargo install unripe-cli
+unripe --resume "continue where we left off"    # resume session
+unripe --chat "explain this code"               # chat-only, no tools
+unripe sessions                                 # list saved sessions
+unripe replay <id> --model qwen3.5:9b           # replay with different model
 ```
 
 ## Architecture
