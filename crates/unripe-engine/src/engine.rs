@@ -223,6 +223,10 @@ impl AgentEngine {
             }
         };
 
+        // Show what's about to happen BEFORE permission check
+        // so the user sees the preview when deciding to approve
+        callbacks.on_tool_start(name, input).await;
+
         // Determine the action for permission checking
         let action = infer_tool_action(name, input, &self.project_root);
 
@@ -247,8 +251,7 @@ impl AgentEngine {
             }
         }
 
-        // Execute
-        callbacks.on_tool_start(name, input).await;
+        // Execute (preview already shown above)
 
         let ctx = ToolContext {
             cwd: self.project_root.clone(),
@@ -533,9 +536,9 @@ mod tests {
             .unwrap();
         assert_eq!(reason, StopReason::EndTurn);
 
-        // Tool should have been denied, not executed
+        // Tool preview was shown (on_tool_start) but execution was denied
         let starts = cb.tool_starts.lock().unwrap();
-        assert!(starts.is_empty());
+        assert_eq!(starts.len(), 1); // preview shown before permission check
         let ends = cb.tool_ends.lock().unwrap();
         assert!(ends[0].1); // is_error = true (denied)
     }
