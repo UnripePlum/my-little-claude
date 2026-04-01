@@ -1,117 +1,71 @@
 #!/bin/bash
-# Demo recording script for asciinema
+# Demo: fix bugs with a local model — no API key needed
 # Usage: asciinema rec demo.cast -c "bash scripts/demo.sh"
-#
-# Prerequisites:
-#   - cargo build --release
-#   - ollama pull qwen3.5:9b
 
 set -e
 
-UNRIPE="./target/release/unripe"
-MODEL="qwen3.5:9b"
+UNRIPE="$(git rev-parse --show-toplevel 2>/dev/null)/target/release/unripe"
 
-run_cmd() {
-    local display_cmd="$1"
-    local real_cmd="$2"
-    echo ""
+type_slow() {
     echo -ne "\033[1;32m❯\033[0m "
-    for ((i=0; i<${#display_cmd}; i++)); do
-        echo -n "${display_cmd:$i:1}"
-        sleep 0.03
-    done
+    for ((i=0; i<${#1}; i++)); do echo -n "${1:$i:1}"; sleep 0.02; done
     echo ""
-    sleep 0.3
-    eval "$real_cmd"
-    sleep 1
 }
 
 clear
-
-# Logo
 echo ""
-echo -e "\033[1;38;5;209m"
-echo "  ╔═══════════════════════════════════════╗"
-echo "  ║                                       ║"
-echo "  ║        my-little-claude               ║"
-echo "  ║                                       ║"
-echo "  ╚═══════════════════════════════════════╝"
-echo -e "\033[0m"
-echo -e "  \033[90mModel-agnostic coding agent harness in Rust\033[0m"
-echo -e "  \033[90mgithub.com/UnripePlum/my-little-claude\033[0m"
+echo -e "  \033[1;38;5;209m╔═══════════════════════════════════════╗\033[0m"
+echo -e "  \033[1;38;5;209m║        my-little-claude               ║\033[0m"
+echo -e "  \033[1;38;5;209m╚═══════════════════════════════════════╝\033[0m"
+echo -e "  \033[90mplug any LLM · run locally · own your agent\033[0m"
 echo ""
-sleep 3
-
-# Scene 1: Setup - show available models
-echo -e "\033[1;33m━━━ Scene 1: Hardware Detection & Model Catalog ━━━\033[0m"
-sleep 1
-run_cmd "unripe setup --list" "$UNRIPE setup --list 2>&1 | head -20"
 sleep 2
 
-# Scene 2: Create a buggy project
-echo ""
-echo -e "\033[1;33m━━━ Scene 2: Create a Project with Bugs ━━━\033[0m"
-sleep 1
+# === Setup: detect hardware, show what it picks ===
+type_slow "unripe setup --list"
+$UNRIPE setup --list 2>&1 | head -12
+sleep 2
 
+# === Buggy file ===
 DEMO_DIR="/tmp/mlc-demo"
-rm -rf "$DEMO_DIR"
-mkdir -p "$DEMO_DIR"
-
-cat > "$DEMO_DIR/calculator.py" << 'PYEOF'
+rm -rf "$DEMO_DIR" && mkdir -p "$DEMO_DIR"
+cat > "$DEMO_DIR/app.py" << 'EOF'
 def add(a, b):
-    return a - b  # BUG: should be a + b
-
-def multiply(a, b):
-    return a * b
+    return a - b  # bug
 
 def divide(a, b):
-    return a / b  # BUG: no zero division check
+    return a / b  # no zero check
 
 def greet(name):
-    print(f"Hello, {nme}!")  # BUG: typo in variable name
+    print(f"Hello, {nme}!")  # typo
+EOF
 
-if __name__ == "__main__":
-    print(f"2 + 3 = {add(2, 3)}")
-    print(f"10 / 0 = {divide(10, 0)}")
-    greet("World")
-PYEOF
-
-run_cmd "cat calculator.py" "cat $DEMO_DIR/calculator.py"
-sleep 2
-
-# Scene 3: Agent fixes the bugs
 echo ""
-echo -e "\033[1;33m━━━ Scene 3: Agent Finds & Fixes Bugs (Local Model, No API Key) ━━━\033[0m"
-sleep 1
+type_slow "cat app.py"
+echo -e "\033[90m# 3 bugs. Can the agent find them all?\033[0m"
+echo ""
+cat "$DEMO_DIR/app.py"
+sleep 3
 
+# === Agent fixes it with local model ===
+echo ""
+type_slow "unripe \"read app.py and fix all bugs\""
+sleep 0.5
 cd "$DEMO_DIR"
-run_cmd "unripe --provider ollama --model $MODEL \"read calculator.py, find all bugs, and fix them\"" \
-        "$UNRIPE --provider ollama --model $MODEL 'read calculator.py, find all bugs, and fix them'"
+$UNRIPE "read app.py and fix all bugs" 2>&1
 sleep 2
 
-# Scene 4: Show the fixed file
+# === Result ===
 echo ""
-echo -e "\033[1;33m━━━ Scene 4: Result ━━━\033[0m"
-sleep 1
-run_cmd "cat calculator.py" "cat $DEMO_DIR/calculator.py"
+type_slow "cat app.py"
+echo -e "\033[90m# Fixed?\033[0m"
+echo ""
+cat "$DEMO_DIR/app.py"
 sleep 2
 
-# Scene 5: Session management
+# === Outro ===
 echo ""
-echo -e "\033[1;33m━━━ Scene 5: Session History ━━━\033[0m"
-sleep 1
-run_cmd "unripe sessions" "$UNRIPE sessions 2>&1 | tail -5"
-sleep 2
-
-# Outro
+echo -e "  \033[1;38;5;209mmy-little-claude\033[0m  3 providers · 5 tools · MCP · 27 models · 100% local"
+echo -e "  \033[90mgithub.com/UnripePlum/my-little-claude\033[0m"
 echo ""
-echo ""
-echo -e "\033[1;36m  ✦ 3 LLM providers (Anthropic, OpenAI, ollama)\033[0m"
-echo -e "\033[1;36m  ✦ 5 built-in tools + MCP plugin support\033[0m"
-echo -e "\033[1;36m  ✦ Runs 100% locally, no API key needed\033[0m"
-echo -e "\033[1;36m  ✦ 156 tests, pure Rust\033[0m"
-echo ""
-echo -e "\033[1m  github.com/UnripePlum/my-little-claude\033[0m"
-echo -e "\033[90m  MIT / Apache-2.0\033[0m"
-echo ""
-sleep 5
+sleep 4

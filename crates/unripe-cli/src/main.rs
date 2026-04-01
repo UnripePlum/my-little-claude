@@ -104,33 +104,103 @@ impl EngineCallbacks for TerminalCallbacks {
     }
 
     async fn on_tool_start(&self, tool_name: &str, input: &serde_json::Value) {
-        let summary = match tool_name {
-            "read_file" => format!(
-                "read_file({})",
-                input.get("path").and_then(|v| v.as_str()).unwrap_or("?")
-            ),
-            "write_file" => format!(
-                "write_file({})",
-                input.get("path").and_then(|v| v.as_str()).unwrap_or("?")
-            ),
-            "bash" => format!(
-                "bash({})",
-                input
-                    .get("command")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("?")
-                    .chars()
-                    .take(60)
-                    .collect::<String>()
-            ),
-            _ => format!("{tool_name}(...)"),
-        };
-        eprintln!("\x1b[36m> {summary}\x1b[0m");
+        match tool_name {
+            "read_file" => {
+                let path = input.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[36m  ╭─ read \x1b[1m{path}\x1b[0m");
+            }
+            "write_file" => {
+                let path = input.get("path").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[33m  ╭─ write \x1b[1m{path}\x1b[0m");
+                // Show a preview of what's being written
+                if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
+                    let lines: Vec<&str> = content.lines().collect();
+                    let preview = if lines.len() > 8 {
+                        let head: Vec<&str> = lines[..4].to_vec();
+                        let tail: Vec<&str> = lines[lines.len() - 2..].to_vec();
+                        format!(
+                            "{}\n\x1b[90m  │  ... ({} more lines)\x1b[0m\n{}",
+                            head.iter()
+                                .map(|l| format!("\x1b[32m  │ +{l}\x1b[0m"))
+                                .collect::<Vec<_>>()
+                                .join("\n"),
+                            lines.len() - 6,
+                            tail.iter()
+                                .map(|l| format!("\x1b[32m  │ +{l}\x1b[0m"))
+                                .collect::<Vec<_>>()
+                                .join("\n")
+                        )
+                    } else {
+                        lines
+                            .iter()
+                            .map(|l| format!("\x1b[32m  │ +{l}\x1b[0m"))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    };
+                    eprintln!("{preview}");
+                }
+            }
+            "bash" => {
+                let cmd = input.get("command").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[35m  ╭─ bash\x1b[0m");
+                eprintln!("\x1b[35m  │ $ {cmd}\x1b[0m");
+            }
+            "glob" => {
+                let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[36m  ╭─ glob \x1b[1m{pattern}\x1b[0m");
+            }
+            "grep" => {
+                let pattern = input.get("pattern").and_then(|v| v.as_str()).unwrap_or("?");
+                eprintln!("\x1b[36m  ╭─ grep \x1b[1m{pattern}\x1b[0m");
+            }
+            _ => {
+                eprintln!("\x1b[36m  ╭─ {tool_name}\x1b[0m");
+            }
+        }
     }
 
-    async fn on_tool_end(&self, tool_name: &str, _result: &str, is_error: bool) {
+    async fn on_tool_end(&self, tool_name: &str, result: &str, is_error: bool) {
         if is_error {
-            eprintln!("\x1b[31m> {tool_name} failed\x1b[0m");
+            // Show error with red
+            let preview = result.lines().take(3).collect::<Vec<_>>().join("\n  │ ");
+            eprintln!("\x1b[31m  │ {preview}\x1b[0m");
+            eprintln!("\x1b[31m  ╰─ {tool_name} failed\x1b[0m");
+        } else {
+            match tool_name {
+                "read_file" => {
+                    // Show first few lines of file content
+                    let lines: Vec<&str> = result.lines().collect();
+                    let count = lines.len();
+                    for line in lines.iter().take(5) {
+                        eprintln!("\x1b[90m  │ {line}\x1b[0m");
+                    }
+                    if count > 5 {
+                        eprintln!("\x1b[90m  │ ... ({count} lines total)\x1b[0m");
+                    }
+                    eprintln!("\x1b[36m  ╰─ done\x1b[0m");
+                }
+                "bash" => {
+                    // Show command output
+                    let lines: Vec<&str> = result.lines().collect();
+                    for line in lines.iter().take(8) {
+                        eprintln!("\x1b[90m  │ {line}\x1b[0m");
+                    }
+                    if lines.len() > 8 {
+                        eprintln!("\x1b[90m  │ ... ({} lines)\x1b[0m", lines.len());
+                    }
+                    eprintln!("\x1b[35m  ╰─ done\x1b[0m");
+                }
+                "write_file" => {
+                    eprintln!("\x1b[33m  ╰─ \x1b[32m{result}\x1b[0m");
+                }
+                _ => {
+                    let preview: String = result.chars().take(80).collect();
+                    if !preview.is_empty() {
+                        eprintln!("\x1b[90m  │ {preview}\x1b[0m");
+                    }
+                    eprintln!("\x1b[36m  ╰─ done\x1b[0m");
+                }
+            }
         }
     }
 }

@@ -98,10 +98,10 @@ pub struct ProviderConfig {
 }
 
 fn default_provider() -> String {
-    "anthropic".into()
+    "ollama".into()
 }
 fn default_model() -> String {
-    "claude-sonnet-4-6-20250514".into()
+    "qwen3.5:9b".into()
 }
 
 impl Default for ProviderConfig {
@@ -224,8 +224,8 @@ mod tests {
     #[test]
     fn test_default_provider_config() {
         let config = ProviderConfig::default();
-        assert_eq!(config.default_provider, "anthropic");
-        assert_eq!(config.default_model, "claude-sonnet-4-6-20250514");
+        assert_eq!(config.default_provider, "ollama");
+        assert_eq!(config.default_model, "qwen3.5:9b");
         assert_eq!(config.ollama.base_url, "http://localhost:11434");
     }
 
@@ -235,7 +235,7 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         let parsed: UnripeConfig = toml::from_str(&toml_str).unwrap();
         assert_eq!(parsed.agent.max_turns, 25);
-        assert_eq!(parsed.provider.default_provider, "anthropic");
+        assert_eq!(parsed.provider.default_provider, "ollama");
     }
 
     #[test]
