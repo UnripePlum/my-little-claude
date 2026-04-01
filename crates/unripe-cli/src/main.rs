@@ -136,19 +136,13 @@ impl EngineCallbacks for TerminalCallbacks {
 }
 
 fn print_banner(provider: &str, model: &str, mode: &str) {
-    eprintln!("\x1b[38;5;209m  ╭──────────╮");
-    eprintln!("\x1b[38;5;209m  │  ┌\x1b[32m>_\x1b[38;5;209m┐   │");
-    eprintln!("\x1b[38;5;209m  │  └──┘   │╲");
-    eprintln!("\x1b[38;5;209m  │  \x1b[1;30m◕\x1b[0m\x1b[38;5;209m  \x1b[1;30m◕\x1b[0m\x1b[38;5;209m  │ ╲");
-    eprintln!("\x1b[38;5;209m  │ \x1b[38;5;218m•\x1b[38;5;209m \x1b[38;5;74m╰‿╯\x1b[38;5;209m \x1b[38;5;218m•\x1b[38;5;209m│  │");
-    eprintln!("\x1b[38;5;209m  ╰──────────╯  │");
-    eprintln!("\x1b[38;5;173m   ╲__________╲_│\x1b[0m");
     eprintln!(
-        "  \x1b[1mmy-little-claude\x1b[0m v{}",
-        env!("CARGO_PKG_VERSION")
+        "\x1b[38;5;209m\x1b[1mmy-little-claude\x1b[0m v{} \x1b[90m| {} / {}{}\x1b[0m",
+        env!("CARGO_PKG_VERSION"),
+        provider,
+        model,
+        mode
     );
-    eprintln!("  \x1b[90m{} / {}{}\x1b[0m", provider, model, mode);
-    eprintln!();
 }
 
 fn build_provider(
