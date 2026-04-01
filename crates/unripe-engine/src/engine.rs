@@ -43,6 +43,7 @@ pub struct AgentEngine {
     permission_gate: Box<dyn PermissionGate>,
     config: AgentConfig,
     project_root: PathBuf,
+    chat_only: bool,
 }
 
 impl AgentEngine {
@@ -59,7 +60,14 @@ impl AgentEngine {
             permission_gate,
             config,
             project_root,
+            chat_only: false,
         }
+    }
+
+    /// Enable chat-only mode (no tool calling, just conversation)
+    pub fn with_chat_only(mut self, chat_only: bool) -> Self {
+        self.chat_only = chat_only;
+        self
     }
 
     /// Run the agent loop for a given prompt
@@ -82,8 +90,12 @@ impl AgentEngine {
         // Truncate if resuming a long session
         session.truncate(self.config.truncation_keep_recent);
 
-        // Build tool definitions
-        let tool_defs: Vec<_> = self.tools.iter().map(|t| t.to_definition()).collect();
+        // Build tool definitions (empty = chat-only mode)
+        let tool_defs: Vec<_> = if self.chat_only {
+            Vec::new()
+        } else {
+            self.tools.iter().map(|t| t.to_definition()).collect()
+        };
 
         let turn_config = TurnConfig {
             max_tokens: 4096,
@@ -605,5 +617,36 @@ mod tests {
 
         let action = infer_tool_action("bash", &serde_json::json!({"command": "ls"}), &root);
         assert!(matches!(action, ToolAction::BashExec(_)));
+    }
+
+    #[tokio::test]
+    async fn test_chat_only_mode_ignores_tools() {
+        // In chat-only mode, even if tools are provided, they should not be sent to the LLM
+        let dir = std::env::temp_dir().join("unripe-test-engine-chat");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let engine = AgentEngine::new(
+            Box::new(MockProvider::new(vec![TurnResponse::Text(
+                "I'm in chat mode!".into(),
+            )])),
+            vec![Box::new(unripe_tools::BashTool::new(5))], // tools provided but should be ignored
+            Box::new(AutoApproveGate),
+            AgentConfig::default(),
+            dir,
+        )
+        .with_chat_only(true);
+
+        let mut session = Session::new("mock", "test");
+        let cb = TestCallbacks::new();
+
+        let reason = engine.run("hello", &mut session, &cb).await.unwrap();
+        assert_eq!(reason, StopReason::EndTurn);
+
+        // No tools should have been called
+        let starts = cb.tool_starts.lock().unwrap();
+        assert!(starts.is_empty());
+
+        let texts = cb.texts.lock().unwrap();
+        assert!(texts.iter().any(|t| t.contains("chat mode")));
     }
 }

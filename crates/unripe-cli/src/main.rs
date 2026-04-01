@@ -33,6 +33,10 @@ struct Cli {
     /// Resume the most recent session
     #[arg(long)]
     resume: bool,
+
+    /// Chat-only mode (no tool calling, just conversation)
+    #[arg(long)]
+    chat: bool,
 }
 
 #[derive(Subcommand)]
@@ -370,11 +374,13 @@ async fn main() -> anyhow::Result<()> {
 
     let provider = build_provider(provider_name, model, &config)?;
 
+    let mode_label = if cli.chat { " | chat-only" } else { "" };
     eprintln!(
-        "\x1b[90mmy-little-claude v{} | {} / {}\x1b[0m",
+        "\x1b[90mmy-little-claude v{} | {} / {}{}\x1b[0m",
         env!("CARGO_PKG_VERSION"),
         provider_name,
-        model
+        model,
+        mode_label
     );
 
     let project_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -387,7 +393,8 @@ async fn main() -> anyhow::Result<()> {
         Box::new(gate),
         config.agent.clone(),
         project_root,
-    );
+    )
+    .with_chat_only(cli.chat);
 
     let session_store = SessionStore::new()?;
     let mut session = if cli.resume {
