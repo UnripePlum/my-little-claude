@@ -104,40 +104,30 @@ pub fn recommend_for_category(
     category: &ModelCategory,
 ) -> ModelRecommendation {
     let available = sys.effective_model_memory_gb();
+    let catalog = load_model_catalog();
 
     // Get models that fit, have tool calling, and match category
-    let mut candidates: Vec<ModelRecommendation> = load_model_catalog()
-        .into_iter()
+    let mut candidates: Vec<ModelRecommendation> = catalog
+        .iter()
         .filter(|m| &m.category == category && m.tool_calling && m.estimated_ram_gb <= available)
+        .cloned()
         .collect();
 
-    // Sort by size (descending for high pref, ascending for light)
-    candidates.sort_by(|a, b| {
-        a.estimated_ram_gb
-            .partial_cmp(&b.estimated_ram_gb)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    sort_by_ram(&mut candidates);
 
     if candidates.is_empty() {
         // Fallback: any model with tool calling that fits
-        let mut fallback: Vec<ModelRecommendation> = load_model_catalog()
-            .into_iter()
+        let mut fallback: Vec<ModelRecommendation> = catalog
+            .iter()
             .filter(|m| m.tool_calling && m.estimated_ram_gb <= available)
+            .cloned()
             .collect();
-        fallback.sort_by(|a, b| {
-            a.estimated_ram_gb
-                .partial_cmp(&b.estimated_ram_gb)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sort_by_ram(&mut fallback);
 
         if fallback.is_empty() {
             // Last resort: smallest model in catalog
-            let mut all = load_model_catalog();
-            all.sort_by(|a, b| {
-                a.estimated_ram_gb
-                    .partial_cmp(&b.estimated_ram_gb)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
+            let mut all = catalog;
+            sort_by_ram(&mut all);
             return all.into_iter().next().unwrap_or(ModelRecommendation {
                 model: "qwen3.5:2b".into(),
                 size_label: "2B".into(),
@@ -152,6 +142,14 @@ pub fn recommend_for_category(
     }
 
     pick_by_preference(&candidates, pref)
+}
+
+fn sort_by_ram(models: &mut [ModelRecommendation]) {
+    models.sort_by(|a, b| {
+        a.estimated_ram_gb
+            .partial_cmp(&b.estimated_ram_gb)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }
 
 /// Pick model from sorted candidates based on preference
